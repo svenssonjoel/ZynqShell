@@ -45,14 +45,14 @@ const char *cmds[] = {"help",
 		     	 	  "exit",
 					  "q",
 					  "mread",
-					  "mwrite"
+					  "mwrite",
 		     	 	  };
 
 const char *hlp_str =
   "----------------------------------------------------------------------\n\r"\
   "help - Displays this message\n\r"\
   "exit - Exits from ZynqShell\n\r"\
-  "mread <type> <address> - \n\r"\
+  "mread <type> <address> [num_elements] - \n\r"\
   "      Read data from memory location <address> and interpret it as\n\r"\
   "      type <type>.\n\r"\
   "      Valid types: int - 32bit signed integer\n\r"\
@@ -79,21 +79,34 @@ int help_cmd(int n, char **args) {
 int mread_cmd(int n, char **args) {
 
 	unsigned int address;
+	unsigned int num_elts = 0;
+	int i = 0;
 
-	if (n < 3 || n > 3) {
-		printf("Wrong number of arguments!\n\rUsage: mread <type> <address>\n\r");
+	if (n < 3 || n > 4) {
+		xil_printf("Wrong number of arguments!\n\rUsage: mread <type> <address>\n\r");
 	    return 0;
 	}
 
 	sscanf(args[2],"%x", &address);
 	/* xil_printf("%x - %u\n\r", address, address); */
 
-	if (strcmp(args[1], "int") == 0) {
-		xil_printf("%d\n\r", *(int*)address);
-	} else if (strcmp(args[1], "uint") == 0) {
-		xil_printf("%u\n\r", *(unsigned int*)address);
+	if (n == 4) {
+		num_elts = atoi(args[3]);
 	}
 
+	for (i = 0; i < num_elts; i ++)  {
+		if (strcmp(args[1], "int") == 0) {
+			xil_printf("%d\n\r", *(int*)(address + i * sizeof(int)));
+		} else if (strcmp(args[1], "uint") == 0) {
+			xil_printf("%u\n\r", *(unsigned int*)(address + i * sizeof(unsigned int)));
+		} else if (strcmp(args[1], "float") == 0) {
+			char tmp[128];
+			snprintf(tmp,128,"%f", *(float*)(address + i * sizeof(float)));
+			xil_printf("%s\n\r", tmp);
+		} else {
+			xil_printf("Incorrect type specifier\n\r");
+		}
+	}
 	return 1;
 }
 
@@ -113,7 +126,12 @@ int mwrite_cmd(int n, char **args) {
 		*(int*)address = atoi(args[3]);
 	} else if (strcmp(args[1], "uint") == 0) {
 		*(unsigned int*)address = atoi(args[3]);
+	} else if (strcmp(args[1], "float") == 0) {
+		*(float*)address = atof(args[3]);
+	} else {
+		xil_printf("Incorrect type specifier\n\r");
 	}
+
 	return 1;
 }
 
@@ -224,7 +242,7 @@ int main()
 
     /* Print the welcome text */
     xil_printf("%s", header);
-    xil_printf("Scratch memory: %x", (unsigned int)scratch);
+    xil_printf("Scratch memory: %x\n\r", (unsigned int)scratch);
 
     /* The command parsing and executing loop */
     while(running) {

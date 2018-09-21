@@ -143,7 +143,7 @@ int mread_cmd(int n, char **args) {
 
 int mwrite_cmd(int n, char **args) {
 
-	unsigned int address;
+  unsigned int address;
 
 	if (n < 4 || n > 4) {
 		xil_printf("Wrong number of arguments!\n\rUsage: mwrite <type> <address> <value>\n\r");
@@ -257,14 +257,14 @@ int loadArray_cmd(int n, char **args) {
 
 /* Array of command functions */
 int (*cmd_func[]) (int, char **) = {
-		&help_cmd,
-		&exit_cmd,
-		&exit_cmd,
-		&mread_cmd,
-		&mwrite_cmd,
-		&show_cmd,
-		&loadArray_cmd
-		};
+    &help_cmd,
+    &exit_cmd,
+    &exit_cmd,
+    &mread_cmd,
+    &mwrite_cmd,
+    &show_cmd,
+    &loadArray_cmd
+};
 
 /* ************************************************************
  * Code
@@ -305,31 +305,32 @@ int dispatch(int num_toks, char **tokens) {
 }
 
 int inputline(char *buffer, int size) {
-	int n = 0;
-	char c;
+  int n = 0;
+  char c;
 
-	for (n = 0; n < size-1; n ++) {
+  for (n = 0; n < size - 1; n++) {
 
-		c = inbyte();
-		switch (c) {
-		case 8: /* backspace character received */
-			if ( n > 0 ) n--;
-			buffer[n] = 0;
-			outbyte('\b'); /* output backspace character */
-			n--; /* set up next iteration to deal with preceding char location */
-			break;
-		case '\n':  /* fall through to \r */
-		case '\r':
-			buffer[n] = 0;
-			return n;
-		default:
-			outbyte(c);
-			buffer[n] = c;
-			break;
-		}
-	}
-	buffer[size-1] = 0;
-	return 0; // Filled up buffer without reading a linebreak
+    c = inbyte();
+    switch (c) {
+    case 8: /* backspace character received */
+      if (n > 0)
+        n--;
+      buffer[n] = 0;
+      outbyte('\b'); /* output backspace character */
+      n--; /* set up next iteration to deal with preceding char location */
+      break;
+    case '\n': /* fall through to \r */
+    case '\r':
+      buffer[n] = 0;
+      return n;
+    default:
+      outbyte(c);
+      buffer[n] = c;
+      break;
+    }
+  }
+  buffer[size - 1] = 0;
+  return 0; // Filled up buffer without reading a linebreak
 }
 
 /* ************************************************************
@@ -351,55 +352,55 @@ int inputline(char *buffer, int size) {
 
 int main()
 {
-    char *cmd_buffer;
-    size_t  cmd_buffer_size = 512;
+  char *cmd_buffer;
+  size_t  cmd_buffer_size = 512;
 
-    const int scratch_size = 512;
-    char *scratch;
+  const int scratch_size = 512;
+  char *scratch;
 
-    char **tokens;
-    int n = 0;
-    int status = 0;
-    int i = 0;
+  char **tokens;
+  int n = 0;
+  int status = 0;
+  int i = 0;
 
-    init_platform();
+  init_platform();
 
-    /* Initialisation */
-    cmd_buffer = malloc(cmd_buffer_size * sizeof(char));
-    scratch = malloc(scratch_size * sizeof(char));
-    tokens = malloc(max_tokens * sizeof(char*));
+  /* Initialisation */
+  cmd_buffer = malloc(cmd_buffer_size * sizeof(char));
+  scratch = malloc(scratch_size * sizeof(char));
+  tokens = malloc(max_tokens * sizeof(char*));
 
-    /* Initialise array storage */
-    for (i = 0; i < MAX_ALLOCATED_ARRAYS; i ++) {
-      arrays[i].available = 1;
-      arrays[i].data = NULL;
-      arrays[i].type = BYTE_TYPE;
-      arrays[i].size = 0;
+  /* Initialise array storage */
+  for (i = 0; i < MAX_ALLOCATED_ARRAYS; i ++) {
+    arrays[i].available = 1;
+    arrays[i].data = NULL;
+    arrays[i].type = BYTE_TYPE;
+    arrays[i].size = 0;
+  }
+
+  /* Print the welcome text */
+  xil_printf("%s", header);
+  xil_printf("Scratch memory: %x\n\r", (unsigned int)scratch);
+
+  /* The command parsing and executing loop */
+  while(running) {
+    xil_printf("%s ", prompt);
+    inputline(cmd_buffer, cmd_buffer_size);
+
+    xil_printf("\n\r");
+
+    n = tokenize(cmd_buffer, &tokens);
+
+    status = dispatch(n, tokens);
+
+    if (!status) {
+      xil_printf("Error executing command!\n\r");
     }
+  }
 
-    /* Print the welcome text */
-    xil_printf("%s", header);
-    xil_printf("Scratch memory: %x\n\r", (unsigned int)scratch);
+  free(tokens);
+  free(cmd_buffer);
 
-    /* The command parsing and executing loop */
-    while(running) {
-    	xil_printf("%s ", prompt);
-    	inputline(cmd_buffer, cmd_buffer_size);
-
-    	xil_printf("\n\r");
-
-    	n = tokenize(cmd_buffer, &tokens);
-
-    	status = dispatch(n, tokens);
-
-    	if (!status) {
-    		xil_printf("Error executing command!\n\r");
-    	}
-    }
-
-    free(tokens);
-    free(cmd_buffer);
-
-    cleanup_platform();
-    return 0;
+  cleanup_platform();
+  return 0;
 }

@@ -42,14 +42,14 @@ int running = 1; /* Start out in running state */
 #define UINT_TYPE 2
 #define FLOAT_TYPE 3
 
-const char *type_str[] = {"byte", "int", "uint", "float"};
+const char *type_str[] = { "byte", "int", "uint", "float" };
 
 #define MAX_ALLOCATED_ARRAYS 20
 typedef struct {
   int available;
   char *data;
-  int  type;
-  int  size; /* in elements of type type */
+  int type;
+  int size; /* in elements of type type */
 } array;
 
 array arrays[MAX_ALLOCATED_ARRAYS];
@@ -96,74 +96,77 @@ const char *hlp_str =
  * ********************************************************* */
 
 int exit_cmd(int n, char **args) {
-	running = 0;
-	return 1;
+  running = 0;
+  return 1;
 }
 
 int help_cmd(int n, char **args) {
-    xil_printf("%s", hlp_str);
-    return 1;
+  xil_printf("%s", hlp_str);
+  return 1;
 }
 
 int mread_cmd(int n, char **args) {
 
-	unsigned int address;
-	unsigned int num_elts = 1; /* 1 element by default */
-	int i = 0;
+  unsigned int address;
+  unsigned int num_elts = 1; /* 1 element by default */
+  int i = 0;
 
-	if (n < 3 || n > 4) {
-		xil_printf("Wrong number of arguments!\n\rUsage: mread <type> <address>\n\r");
-		return 0;
-	}
+  if (n < 3 || n > 4) {
+    xil_printf(
+        "Wrong number of arguments!\n\rUsage: mread <type> <address>\n\r");
+    return 0;
+  }
 
-	sscanf(args[2],"%x", &address);
-	/* xil_printf("%x - %u\n\r", address, address); */
+  sscanf(args[2], "%x", &address);
+  /* xil_printf("%x - %u\n\r", address, address); */
 
-	if (n == 4) {
-		num_elts = atoi(args[3]);
-		if (num_elts < 1)
-		  return 0;
-	}
+  if (n == 4) {
+    num_elts = atoi(args[3]);
+    if (num_elts < 1)
+      return 0;
+  }
 
-	for (i = 0; i < num_elts; i ++)  {
-		if (strcmp(args[1], "int") == 0) {
-			xil_printf("%d\n\r", *(int*)(address + i * sizeof(int)));
-		} else if (strcmp(args[1], "uint") == 0) {
-			xil_printf("%u\n\r", *(unsigned int*)(address + i * sizeof(unsigned int)));
-		} else if (strcmp(args[1], "float") == 0) {
-			char tmp[128];
-			snprintf(tmp,128,"%f", *(float*)(address + i * sizeof(float)));
-			xil_printf("%s\n\r", tmp);
-		} else {
-			xil_printf("Incorrect type specifier\n\r");
-		}
-	}
-	return 1;
+  for (i = 0; i < num_elts; i++) {
+    if (strcmp(args[1], "int") == 0) {
+      xil_printf("%d\n\r", *(int*) (address + i * sizeof(int)));
+    } else if (strcmp(args[1], "uint") == 0) {
+      xil_printf("%u\n\r",
+          *(unsigned int*) (address + i * sizeof(unsigned int)));
+    } else if (strcmp(args[1], "float") == 0) {
+      char tmp[128];
+      snprintf(tmp, 128, "%f", *(float*) (address + i * sizeof(float)));
+      xil_printf("%s\n\r", tmp);
+    } else {
+      xil_printf("Incorrect type specifier\n\r");
+    }
+  }
+  return 1;
 }
 
 int mwrite_cmd(int n, char **args) {
 
   unsigned int address;
 
-	if (n < 4 || n > 4) {
-		xil_printf("Wrong number of arguments!\n\rUsage: mwrite <type> <address> <value>\n\r");
-		return 0;
-	}
+  if (n < 4 || n > 4) {
+    xil_printf(
+        "Wrong number of arguments!\n\rUsage: mwrite <type> <address> <value>\n\r");
+    return 0;
+  }
 
-	sscanf(args[2],"%x", &address);
-	/* xil_printf("%x - %u\n\r", address, address); */
+  sscanf(args[2], "%x", &address);
+  /* xil_printf("%x - %u\n\r", address, address); */
 
-	if (strcmp(args[1], "int") == 0) {
-		*(int*)address = atoi(args[3]);
-	} else if (strcmp(args[1], "uint") == 0) {
-		*(unsigned int*)address = atoi(args[3]);
-	} else if (strcmp(args[1], "float") == 0) {
-		*(float*)address = atof(args[3]);
-	} else {
-		xil_printf("Incorrect type specifier\n\r");
-	}
+  if (strcmp(args[1], "int") == 0) {
+    *(int*) address = atoi(args[3]);
+  } else if (strcmp(args[1], "uint") == 0) {
+    *(unsigned int*) address = atoi(args[3]);
+  } else if (strcmp(args[1], "float") == 0) {
+    *(float*) address = atof(args[3]);
+  } else {
+    xil_printf("Incorrect type specifier\n\r");
+  }
 
-	return 1;
+  return 1;
 }
 
 int show_cmd(int n, char **args) {
@@ -175,14 +178,12 @@ int show_cmd(int n, char **args) {
     return 0;
   }
 
-  if(strcmp(args[1], "arrays") == 0){
+  if (strcmp(args[1], "arrays") == 0) {
     xil_printf("ID\t Status\t Addr\t Type\t Size\n\r");
-    for (i = 0; i < MAX_ALLOCATED_ARRAYS; i ++) {
-      xil_printf("%d\t %s\t %x\t %s\t %d\n\r",
-          i, arrays[i].available ? "Free" : "Used",
-              (unsigned int)arrays[i].data,
-              type_str[arrays[i].type],
-              arrays[i].size);
+    for (i = 0; i < MAX_ALLOCATED_ARRAYS; i++) {
+      xil_printf("%d\t %s\t %x\t %s\t %d\n\r", i,
+          arrays[i].available ? "Free" : "Used", (unsigned int) arrays[i].data,
+          type_str[arrays[i].type], arrays[i].size);
     }
   } else {
     xil_printf("No information available on %s\n\r", args[1]);
@@ -199,7 +200,8 @@ int loadArray_cmd(int n, char **args) {
   char buffer[256];
 
   if (n < 3 || n > 4) {
-    xil_printf("Wrong number of arguments!\n\rUsage: loadArray <type> <num_elements> [ID]\n\r");
+    xil_printf(
+        "Wrong number of arguments!\n\rUsage: loadArray <type> <num_elements> [ID]\n\r");
     return 0;
   }
 
@@ -207,20 +209,20 @@ int loadArray_cmd(int n, char **args) {
   if (n == 4) {
     use_id = atoi(args[3]);
 
-    if ( use_id < 0 || use_id > MAX_ALLOCATED_ARRAYS) {
-    xil_printf("Incorrect array id!\n\r");
-    return 0;
+    if (use_id < 0 || use_id > MAX_ALLOCATED_ARRAYS) {
+      xil_printf("Incorrect array id!\n\r");
+      return 0;
     }
     if (!arrays[use_id].available) {
       free(arrays[use_id].data);
-      arrays[use_id].available = 1;    /* temporarily initialise to available and free mem*/
+      arrays[use_id].available = 1; /* temporarily initialise to available and free mem*/
       arrays[use_id].data = NULL;
       arrays[use_id].size = 0;
       arrays[use_id].type = BYTE_TYPE;
     }
 
   } else { /* find free array slot */
-    for (i = 0; i < MAX_ALLOCATED_ARRAYS; i ++) {
+    for (i = 0; i < MAX_ALLOCATED_ARRAYS; i++) {
       if (arrays[i].available) {
         use_id = i;
         break;
@@ -239,13 +241,13 @@ int loadArray_cmd(int n, char **args) {
   if (strcmp(args[1], "int") == 0) {
     arrays[use_id].data = (char *) malloc(num * sizeof(int));
     arrays[use_id].type = INT_TYPE;
-    for (i = 0; i < num; i ++) {
+    for (i = 0; i < num; i++) {
       inputline(buffer, 256);
       xil_printf("\n\r");
       xil_printf("buffer = %s\n\r", buffer);
       int val = atoi(buffer);
       xil_printf("atoi = %d\n\r", val);
-      ((int*)arrays[use_id].data)[i] = val;
+      ((int*) arrays[use_id].data)[i] = val;
     }
 
   } else {
@@ -256,14 +258,14 @@ int loadArray_cmd(int n, char **args) {
 }
 
 /* Array of command functions */
-int (*cmd_func[]) (int, char **) = {
-    &help_cmd,
-    &exit_cmd,
-    &exit_cmd,
-    &mread_cmd,
-    &mwrite_cmd,
-    &show_cmd,
-    &loadArray_cmd
+int (*cmd_func[])(int, char **) = {
+  &help_cmd,
+  &exit_cmd,
+  &exit_cmd,
+  &mread_cmd,
+  &mwrite_cmd,
+  &show_cmd,
+  &loadArray_cmd
 };
 
 /* ************************************************************
@@ -276,14 +278,14 @@ int tokenize(char *cmd_str, char ***tokens) {
 
   token = strtok(cmd_str, tokdelim);
   while (token) {
-	  /* Abort if out of space */
-	  if (num_tokens == max_tokens) {
-		  xil_printf("\n\rToo many arguments!\n\r");
-		  return 0;
-	  }
-	  (*tokens)[num_tokens++] = token;
+    /* Abort if out of space */
+    if (num_tokens == max_tokens) {
+      xil_printf("\n\rToo many arguments!\n\r");
+      return 0;
+    }
+    (*tokens)[num_tokens++] = token;
 
-	  token = strtok(NULL, tokdelim);
+    token = strtok(NULL, tokdelim);
   }
   return num_tokens;
 }
@@ -293,12 +295,13 @@ int dispatch(int num_toks, char **tokens) {
   int i = 0;
   int n_cmds = sizeof(cmds) / sizeof(char *);
 
-  if (!num_toks) return 1;
+  if (!num_toks)
+    return 1;
 
-  for ( i = 0; i < n_cmds; i ++) {
-  	  if (strcmp(tokens[0], cmds[i]) == 0) {
-		  return (*cmd_func[i])(num_toks, tokens);
-	  }
+  for (i = 0; i < n_cmds; i++) {
+    if (strcmp(tokens[0], cmds[i]) == 0) {
+      return (*cmd_func[i])(num_toks, tokens);
+    }
   }
   xil_printf("%s: command not found\n\r", tokens[0]);
   return 1;

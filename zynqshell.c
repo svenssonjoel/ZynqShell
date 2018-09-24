@@ -73,7 +73,8 @@ const char *cmds[] = {"help",
 
 const char *hlp_str =
   "----------------------------------------------------------------------\n\r"\
-  "help - Displays this message\n\r"\
+  "help [about] - (with no arguments) Displays this message\n\r"\
+  "      Valid abouts: extension - displays extension help\n\r"\
   "exit - Exits from ZynqShell\n\r"\
   "mread <type> <address> [num_elements] - \n\r"\
   "      Read data from memory location <address> and interpret it as\n\r"\
@@ -91,6 +92,48 @@ const char *hlp_str =
   "----------------------------------------------------------------------\n\r";
 
 /* ************************************************************
+ * Extensions Interface
+ * ********************************************************* */
+char* (*extension_help)() = NULL; /* extension should return help string */
+int (*extension_dispatch)(int, char **) = NULL; /*extension command dispatcher */
+
+void setExtensionHelp(char* (*ptr)()) {
+  extension_help = ptr;
+}
+
+void setExtensionDispatch(int (*ptr)(int, char**)) {
+  extension_dispatch = ptr;
+}
+
+
+
+/* ************************************************************
+ * Array management helper functions
+ * ********************************************************* */
+
+int freeArray(int id) {
+  if (id >= 0 && id < MAX_ALLOCATED_ARRAYS) {
+    if (!arrays[id].available) {
+      free(arrays[id].data);
+      arrays[id].data = NULL;
+      arrays[id].available = 1;
+      arrays[id].size = 0;
+      arrays[id].type = BYTE_TYPE;
+    }
+    return 1;
+  }
+  return 0;
+}
+
+void freeArrays() {
+  int i = 0;
+  for (i = 0; i < MAX_ALLOCATED_ARRAYS; i ++) {
+    freeArray(i);
+  }
+}
+
+
+/* ************************************************************
  * Implementation of commands
  * ********************************************************* */
 
@@ -100,7 +143,21 @@ int exit_cmd(int n, char **args) {
 }
 
 int help_cmd(int n, char **args) {
-  xil_printf("%s", hlp_str);
+
+  if (n < 1 || n > 2) {
+      xil_printf("Wrong number of arguments!\n\rUsage: help [about]\n\r");
+  }
+  if (n == 2) {
+    if (strcmp(args[1], "extension") == 0) {
+      if (extension_help) {
+        xil_printf("%s", extension_help());
+      } else {
+        xil_printf("No extension help available\n\r");
+      }
+    }
+  } else {
+    xil_printf("%s", hlp_str);
+  }
   return 1;
 }
 
@@ -212,14 +269,17 @@ int loadArray_cmd(int n, char **args) {
       xil_printf("Incorrect array id!\n\r");
       return 0;
     }
+    /* free the array */
+    freeArray(use_id);
+/*
     if (!arrays[use_id].available) {
       free(arrays[use_id].data);
-      arrays[use_id].available = 1; /* temporarily initialise to available and free mem*/
+      arrays[use_id].available = 1;
       arrays[use_id].data = NULL;
       arrays[use_id].size = 0;
       arrays[use_id].type = BYTE_TYPE;
     }
-
+*/
   } else { /* find free array slot */
     for (i = 0; i < MAX_ALLOCATED_ARRAYS; i++) {
       if (arrays[i].available) {
@@ -302,6 +362,12 @@ int dispatch(int num_toks, char **tokens) {
       return (*cmd_func[i])(num_toks, tokens);
     }
   }
+
+  if(extension_dispatch) {
+    extension_dispatch(num_toks, tokens);
+    return 1;
+  }
+
   xil_printf("%s: command not found\n\r", tokens[0]);
   return 1;
 }
@@ -314,7 +380,8 @@ int inputline(char *buffer, int size) {
 
     c = inbyte();
     switch (c) {
-    case 8: /* backspace character received */
+    case 127: /* fall through to below */
+    case '\b': /* backspace character received */
       if (n > 0)
         n--;
       buffer[n] = 0;
@@ -326,8 +393,12 @@ int inputline(char *buffer, int size) {
       buffer[n] = 0;
       return n;
     default:
-      outbyte(c);
-      buffer[n] = c;
+      if (isprint(c)) { /* ignore non-printable characters */
+        outbyte(c);
+        buffer[n] = c;
+      } else {
+        n -= 1;
+      }
       break;
     }
   }
@@ -387,6 +458,7 @@ int main()
     }
   }
 
+  freeArrays();
   free(tokens);
   free(cmd_buffer);
 

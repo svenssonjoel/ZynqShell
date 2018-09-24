@@ -271,15 +271,7 @@ int loadArray_cmd(int n, char **args) {
     }
     /* free the array */
     freeArray(use_id);
-/*
-    if (!arrays[use_id].available) {
-      free(arrays[use_id].data);
-      arrays[use_id].available = 1;
-      arrays[use_id].data = NULL;
-      arrays[use_id].size = 0;
-      arrays[use_id].type = BYTE_TYPE;
-    }
-*/
+
   } else { /* find free array slot */
     for (i = 0; i < MAX_ALLOCATED_ARRAYS; i++) {
       if (arrays[i].available) {
@@ -298,18 +290,38 @@ int loadArray_cmd(int n, char **args) {
   arrays[use_id].available = 0;
 
   if (strcmp(args[1], "int") == 0) {
-    arrays[use_id].data = (char *) malloc(num * sizeof(int));
+    arrays[use_id].data = (char *)malloc(num * sizeof(int));
     arrays[use_id].type = INT_TYPE;
     for (i = 0; i < num; i++) {
       inputline(buffer, 256);
       xil_printf("\n\r");
-      xil_printf("buffer = %s\n\r", buffer);
       int val = atoi(buffer);
-      xil_printf("atoi = %d\n\r", val);
       ((int*) arrays[use_id].data)[i] = val;
+      }
+  } else if (strcmp(args[1], "uint") == 0) {
+    arrays[use_id].data = (char *)malloc(num * sizeof(unsigned int));
+    arrays[use_id].type = UINT_TYPE;
+    for (i = 0; i < num; i ++)  {
+      inputline(buffer, 256);
+      xil_printf("\n\r");
+      unsigned int val = atoi(buffer);
+      ((unsigned int*)arrays[use_id].data)[i] = val;
     }
-
+  } else if (strcmp(args[1], "float") == 0) {
+    arrays[use_id].data = (char *)malloc(num * sizeof(float));
+    arrays[use_id].type = FLOAT_TYPE;
+    for (i = 0; i < num; i ++) {
+      inputline(buffer,256);
+      xil_printf("\n\r");
+      float val = atof(buffer);
+      ((float*)arrays[use_id].data)[i] = val;
+    }
   } else {
+    /* if we get here we have claimed a slot in error and
+     * potentially freed an array incorrectly
+     */
+    arrays[use_id].available = 1;
+    arrays[use_id].size = 0;
     xil_printf("type %s not yet supported\n\r", args[1]);
     return 0;
   }

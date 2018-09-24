@@ -5,4 +5,4 @@ that for specific experiments, tweaks will be needed.
 
 # Howto
 I currently build this by creating a "hello world" application in Vivado SDK and replace the helloworld.c file there with 
-the zynqshell.c file. 
+the zynqshell.c file (ln -s to the file in the repo clone). 

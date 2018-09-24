@@ -90,7 +90,6 @@ const char *hlp_str =
   "     data that is parseable as <type>\n\r"\
   "----------------------------------------------------------------------\n\r";
 
-
 /* ************************************************************
  * Implementation of commands
  * ********************************************************* */
@@ -335,19 +334,6 @@ int inputline(char *buffer, int size) {
   buffer[size - 1] = 0;
   return 0; // Filled up buffer without reading a linebreak
 }
-
-/* ************************************************************
- * Screen help:
- *
- *  CTRL+h                                  -  sends backspace character
- *
- *  ctrl+a : readreg <regname> <filename>   - read contents of file into screen
- *
- *  ctrl+a : paste <regname>                - pastes contents of register <regname> into the session
- *
- *  ctrl+a : help                           - displays help
- *
- * ********************************************************* */
 
 /* ************************************************************
  * Main

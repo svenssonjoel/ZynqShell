@@ -105,6 +105,13 @@ void setExtensionDispatch(int (*ptr)(int, char**)) {
   extension_dispatch = ptr;
 }
 
+/* new extension approach */
+//char **extension_cmds;
+int  num_extension_cmds = 1;
+
+
+const char *e_cmds[] = {"ehelp"};
+const char **extension_cmds = e_cmds;
 
 
 /* ************************************************************
@@ -339,6 +346,9 @@ int (*cmd_func[])(int, char **) = {
   &loadArray_cmd
 };
 
+int (*(*extension_cmd_func))(int, char **) = cmd_func;
+
+
 /* ************************************************************
  * Code
  * ********************************************************* */
@@ -372,6 +382,12 @@ int dispatch(int num_toks, char **tokens) {
   for (i = 0; i < n_cmds; i++) {
     if (strcmp(tokens[0], cmds[i]) == 0) {
       return (*cmd_func[i])(num_toks, tokens);
+    }
+  }
+  /* Deal with extension commands */
+  for (i = 0; i < num_extension_cmds; i ++) {
+    if (strcmp(tokens[0], extension_cmds[i]) == 0) {
+      return (*(*extension_cmd_func[i]))(num_toks, tokens);
     }
   }
 

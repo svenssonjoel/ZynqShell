@@ -74,7 +74,7 @@ const char *cmds[] = {"help",
 const char *hlp_str =
   "----------------------------------------------------------------------\n\r"\
   "help [about] - (with no arguments) Displays this message\n\r"\
-  "      Valid abouts: extension - displays extension help\n\r"\
+  "      Valid abouts: Currently no valid abouts\n\r"\
   "exit - Exits from ZynqShell\n\r"\
   "mread <type> <address> [num_elements] - \n\r"\
   "      Read data from memory location <address> and interpret it as\n\r"\
@@ -90,29 +90,6 @@ const char *hlp_str =
   "     Will expext <num_elements> lines of input containing\n\r"\
   "     data that is parseable as <type>\n\r"\
   "----------------------------------------------------------------------\n\r";
-
-/* ************************************************************
- * Extensions Interface
- * ********************************************************* */
-char* (*extension_help)() = NULL; /* extension should return help string */
-int (*extension_dispatch)(int, char **) = NULL; /*extension command dispatcher */
-
-void setExtensionHelp(char* (*ptr)()) {
-  extension_help = ptr;
-}
-
-void setExtensionDispatch(int (*ptr)(int, char**)) {
-  extension_dispatch = ptr;
-}
-
-/* new extension approach */
-//char **extension_cmds;
-int  num_extension_cmds = 1;
-
-
-const char *e_cmds[] = {"ehelp"};
-const char **extension_cmds = e_cmds;
-
 
 /* ************************************************************
  * Array management helper functions
@@ -155,13 +132,7 @@ int help_cmd(int n, char **args) {
       xil_printf("Wrong number of arguments!\n\rUsage: help [about]\n\r");
   }
   if (n == 2) {
-    if (strcmp(args[1], "extension") == 0) {
-      if (extension_help) {
-        xil_printf("%s", extension_help());
-      } else {
-        xil_printf("No extension help available\n\r");
-      }
-    }
+    xil_printf("Currently no valid abouts.\n\r");
   } else {
     xil_printf("%s", hlp_str);
   }
@@ -346,8 +317,6 @@ int (*cmd_func[])(int, char **) = {
   &loadArray_cmd
 };
 
-int (*(*extension_cmd_func))(int, char **) = cmd_func;
-
 
 /* ************************************************************
  * Code
@@ -383,17 +352,6 @@ int dispatch(int num_toks, char **tokens) {
     if (strcmp(tokens[0], cmds[i]) == 0) {
       return (*cmd_func[i])(num_toks, tokens);
     }
-  }
-  /* Deal with extension commands */
-  for (i = 0; i < num_extension_cmds; i ++) {
-    if (strcmp(tokens[0], extension_cmds[i]) == 0) {
-      return (*(*extension_cmd_func[i]))(num_toks, tokens);
-    }
-  }
-
-  if(extension_dispatch) {
-    extension_dispatch(num_toks, tokens);
-    return 1;
   }
 
   xil_printf("%s: command not found\n\r", tokens[0]);

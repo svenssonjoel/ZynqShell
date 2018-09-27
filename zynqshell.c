@@ -86,6 +86,7 @@ const char *hlp_str =
   "show <what> - \n\r"\
   "     show information about <what>. \n\r"\
   "     Valid whats: arrays -  show information about allocated arrays\n\r"\
+  "                  array <id> - show array <id>\n\r"\
   "loadArray <type> <num_elements> [ID] - Load elements into an array\n\r"\
   "     Will expext <num_elements> lines of input containing\n\r"\
   "     data that is parseable as <type>\n\r"\
@@ -203,11 +204,55 @@ int mwrite_cmd(int n, char **args) {
   return 1;
 }
 
+void printByte(char *ptr, int i) {
+  xil_printf("%d", ((char*)ptr)[i]);
+}
+void printInt(char *ptr, int i) {
+  xil_printf("%d", ((int*)ptr)[i]);
+}
+void printUInt(char *ptr, int i) {
+  xil_printf("%u", ((unsigned int *)ptr)[i]);
+}
+void printFloat(char *ptr, int i) {
+  char buffer[256];
+  snprintf(buffer,256,"%f",((float*)ptr)[i]);
+  xil_printf("%s", buffer);
+}
+
+int printArray(int id) {
+  int i = 0;
+
+  void (*printer)(char *, int) = NULL;
+
+  switch (arrays[id].type) {
+  case INT_TYPE:
+    printer = printInt;
+    break;
+  case FLOAT_TYPE:
+    printer = printFloat;
+    break;
+  case BYTE_TYPE:
+    printer = printByte;
+    break;
+  case UINT_TYPE:
+    printer = printUInt;
+    break;
+  default:
+    xil_printf("Unsupported type\n\r");
+    return 0;
+  }
+  for (i = 0; i < arrays[id].size; i ++) {
+    printer(arrays[id].data, i);
+    xil_printf("\n\r");
+  }
+  return 1;
+}
+
 int show_cmd(int n, char **args) {
 
   int i;
 
-  if (n < 2 || n > 2) {
+  if (n < 2 ) {
     xil_printf("Wrong number of arguments!\n\rUsage: show <what>\n\r");
     return 0;
   }
@@ -219,6 +264,19 @@ int show_cmd(int n, char **args) {
           arrays[i].available ? "Free" : "Used", (unsigned int) arrays[i].data,
           type_str[arrays[i].type], arrays[i].size);
     }
+  } if (strcmp (args[1], "array") == 0) {
+
+    if (n < 3) {
+      xil_printf("Requires an ArrayID argument!\n\r");
+      return 0;
+    }
+    int id = atoi(args[2]);
+    if (arrays[id].available) {
+      xil_printf("Available\n\r",id);
+    } else {
+      printArray(id);
+    }
+
   } else {
     xil_printf("No information available on %s\n\r", args[1]);
   }

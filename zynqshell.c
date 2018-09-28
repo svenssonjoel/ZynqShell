@@ -23,6 +23,10 @@
 
 #include "platform.h"
 #include "xil_printf.h"
+#include "xil_mmu.h"
+#include "xil_cache.h"
+#include "xil_cache_l.h"
+#include "xil_io.h"
 
 #include <malloc.h>
 #include <stdlib.h>
@@ -30,6 +34,18 @@
 
 /* PROTOS */
 int inputline(char *buffer, int size);
+
+/* ************************************************************
+ * Application specific
+ * ********************************************************* */
+
+#define CONTROL    (0x43c00000)
+#define INPUT_REG  (0x43c00008)
+#define OUTPUT_REG (0x43c00018)
+
+void init_app() {
+  Xil_SetTlbAttributes(CONTROL, 0x10c06);
+}
 
 
 /* ************************************************************
@@ -68,7 +84,10 @@ const char *cmds[] = {"help",
                       "mread",
                       "mwrite",
                       "show",
-                      "loadArray"
+                      "loadArray",
+                      "mkArray",
+                      "cf",
+                      "ci"
                       };
 
 const char *hlp_str =
@@ -90,6 +109,9 @@ const char *hlp_str =
   "loadArray <type> <num_elements> [ID] - Load elements into an array\n\r"\
   "     Will expext <num_elements> lines of input containing\n\r"\
   "     data that is parseable as <type>\n\r"\
+  "mkArray <type> <num_elements> [ID] - allocate an array\n\r"\
+  "cf - cache flush\n\r"\
+  "ci - cache invalidate\n\r"\
   "----------------------------------------------------------------------\n\r";
 
 /* ************************************************************
@@ -161,6 +183,9 @@ int mread_cmd(int n, char **args) {
       return 0;
   }
 
+  Xil_DCacheFlushRange(address, num_elts * 4); /* TODO fix */
+
+
   for (i = 0; i < num_elts; i++) {
     if (strcmp(args[1], "int") == 0) {
       xil_printf("%d\n\r", *(int*) (address + i * sizeof(int)));
@@ -192,11 +217,27 @@ int mwrite_cmd(int n, char **args) {
   /* xil_printf("%x - %u\n\r", address, address); */
 
   if (strcmp(args[1], "int") == 0) {
-    *(int*) address = atoi(args[3]);
+    int val;
+    if (strncmp(args[3],"0x", 2) == 0) { /* Inteprete as hex */
+      sscanf(args[3],"%x", &val);
+    } else {
+      val = atoi(args[3]);
+    }
+    *(int*) address = val;
+    Xil_DCacheFlushRange(address, sizeof(int));
+
   } else if (strcmp(args[1], "uint") == 0) {
-    *(unsigned int*) address = atoi(args[3]);
+    unsigned int val;
+    if (strncmp(args[3],"0x", 2) == 0) { /* Inteprete as hex */
+      sscanf(args[3],"%x", &val);
+    } else {
+      val = atoi(args[3]);
+    }
+    *(unsigned int*) address = val;
+    Xil_DCacheFlushRange(address, sizeof(unsigned int));
   } else if (strcmp(args[1], "float") == 0) {
     *(float*) address = atof(args[3]);
+    Xil_DCacheFlushRange(address, sizeof(float));
   } else {
     xil_printf("Incorrect type specifier\n\r");
   }
@@ -221,26 +262,31 @@ void printFloat(char *ptr, int i) {
 
 int printArray(int id) {
   int i = 0;
+  int bytes = arrays[id].size;
 
   void (*printer)(char *, int) = NULL;
 
   switch (arrays[id].type) {
   case INT_TYPE:
     printer = printInt;
+    bytes *= sizeof(int);
     break;
   case FLOAT_TYPE:
     printer = printFloat;
+    bytes = sizeof(float);
     break;
   case BYTE_TYPE:
     printer = printByte;
     break;
   case UINT_TYPE:
     printer = printUInt;
+    bytes *= sizeof(unsigned int);
     break;
   default:
     xil_printf("Unsupported type\n\r");
     return 0;
   }
+  Xil_DCacheFlushRange((unsigned int)arrays[id].data, bytes);
   for (i = 0; i < arrays[id].size; i ++) {
     printer(arrays[id].data, i);
     xil_printf("\n\r");
@@ -264,7 +310,7 @@ int show_cmd(int n, char **args) {
           arrays[i].available ? "Free" : "Used", (unsigned int) arrays[i].data,
           type_str[arrays[i].type], arrays[i].size);
     }
-  } if (strcmp (args[1], "array") == 0) {
+  } else if (strcmp (args[1], "array") == 0) {
 
     if (n < 3) {
       xil_printf("Requires an ArrayID argument!\n\r");
@@ -290,6 +336,7 @@ int loadArray_cmd(int n, char **args) {
   int use_id = -1; // initialise to -1 for check if available was found
   int i = 0;
   char buffer[256];
+  int bytes = 0;
 
   if (n < 3 || n > 4) {
     xil_printf(
@@ -298,6 +345,104 @@ int loadArray_cmd(int n, char **args) {
   }
 
   num = atoi(args[2]);
+  if (n == 4) {
+    use_id = atoi(args[3]);
+
+    if (use_id < 0 || use_id > MAX_ALLOCATED_ARRAYS) {
+      xil_printf("Incorrect array id!\n\r");
+      return 0;
+    }
+  } else { /* find free array slot */
+    for (i = 0; i < MAX_ALLOCATED_ARRAYS; i++) {
+      if (arrays[i].available) {
+        use_id = i;
+        break;
+      }
+    }
+  }
+  if (use_id == -1) {
+    xil_printf("No available array slot\n\r");
+    return 0;
+  }
+
+  /* If we arrive here, we have selected a slot */
+
+  if (strcmp(args[1], "int") == 0) {
+    if (!arrays[use_id].available) { // if selected is in use
+      freeArray(use_id);
+    }
+    arrays[use_id].size = num;
+    arrays[use_id].available = 0;
+    arrays[use_id].data = (char *)malloc(num * sizeof(int));
+    arrays[use_id].type = INT_TYPE;
+    for (i = 0; i < num; i++) {
+      inputline(buffer, 256);
+      xil_printf("\n\r");
+      int val = atoi(buffer);
+      ((int*) arrays[use_id].data)[i] = val;
+      }
+    bytes = num * sizeof(int);
+  } else if (strcmp(args[1], "uint") == 0) {
+    if (!arrays[use_id].available) { // if selected is in use
+      freeArray(use_id);
+    }
+    arrays[use_id].size = num;
+    arrays[use_id].available = 0;
+    arrays[use_id].data = (char *)malloc(num * sizeof(unsigned int));
+    arrays[use_id].type = UINT_TYPE;
+    for (i = 0; i < num; i ++)  {
+      inputline(buffer, 256);
+      xil_printf("\n\r");
+      unsigned int val = atoi(buffer);
+      ((unsigned int*)arrays[use_id].data)[i] = val;
+    }
+    bytes = num * sizeof(unsigned int);
+  } else if (strcmp(args[1], "float") == 0) {
+    if (!arrays[use_id].available) { // if selected is in use
+      freeArray(use_id);
+    }
+    arrays[use_id].size = num;
+    arrays[use_id].available = 0;
+    arrays[use_id].data = (char *)malloc(num * sizeof(float));
+    arrays[use_id].type = FLOAT_TYPE;
+    for (i = 0; i < num; i ++) {
+      inputline(buffer,256);
+      xil_printf("\n\r");
+      float val = atof(buffer);
+      ((float*)arrays[use_id].data)[i] = val;
+    }
+    bytes = num * sizeof(float);
+  } else {
+    /*
+     * Unsupported type
+     */
+    //arrays[use_id].available = 1;
+    //arrays[use_id].size = 0;
+    xil_printf("type %s not yet supported\n\r", args[1]);
+    return 0;
+  }
+  dsb();
+  //xil_printf("flushing %d bytes at address %x\n\r", bytes, (unsigned int)arrays[use_id].data);
+  xil_printf("flushing cache\n\r");
+  //Xil_DCacheFlushRange((unsigned int)arrays[use_id].data, bytes);
+  Xil_DCacheFlush();
+
+  return 1;
+}
+
+int mkArray_cmd(int n, char **args) {
+  int i = 0;
+  int use_id = -1;
+  int num = 0;
+
+  if (n < 3 || n > 4) {
+    xil_printf(
+            "Wrong number of arguments!\n\rUsage: mkArray <type> <num_elements> [ID]\n\r");
+        return 0;
+  }
+
+  num = atoi(args[2]);
+
   if (n == 4) {
     use_id = atoi(args[3]);
 
@@ -321,46 +466,50 @@ int loadArray_cmd(int n, char **args) {
     return 0;
   }
 
-  /* If we arrive here, we have a slot */
-  arrays[use_id].size = num;
-  arrays[use_id].available = 0;
-
   if (strcmp(args[1], "int") == 0) {
-    arrays[use_id].data = (char *)malloc(num * sizeof(int));
+    if (!arrays[use_id].available) { // if selected is in use
+      freeArray(use_id);
+    }
+    arrays[use_id].size = num;
+    arrays[use_id].available = 0;
+    arrays[use_id].data = (char *) malloc(num * sizeof(int));
+    memset(arrays[use_id].data,0,num * sizeof(int));
     arrays[use_id].type = INT_TYPE;
-    for (i = 0; i < num; i++) {
-      inputline(buffer, 256);
-      xil_printf("\n\r");
-      int val = atoi(buffer);
-      ((int*) arrays[use_id].data)[i] = val;
-      }
   } else if (strcmp(args[1], "uint") == 0) {
-    arrays[use_id].data = (char *)malloc(num * sizeof(unsigned int));
+    if (!arrays[use_id].available) { // if selected is in use
+      freeArray(use_id);
+    }
+    arrays[use_id].size = num;
+    arrays[use_id].available = 0;
+    arrays[use_id].data = (char *) malloc(num * sizeof(unsigned int));
+    memset(arrays[use_id].data,0,num * sizeof(unsigned int));
     arrays[use_id].type = UINT_TYPE;
-    for (i = 0; i < num; i ++)  {
-      inputline(buffer, 256);
-      xil_printf("\n\r");
-      unsigned int val = atoi(buffer);
-      ((unsigned int*)arrays[use_id].data)[i] = val;
-    }
   } else if (strcmp(args[1], "float") == 0) {
-    arrays[use_id].data = (char *)malloc(num * sizeof(float));
-    arrays[use_id].type = FLOAT_TYPE;
-    for (i = 0; i < num; i ++) {
-      inputline(buffer,256);
-      xil_printf("\n\r");
-      float val = atof(buffer);
-      ((float*)arrays[use_id].data)[i] = val;
+    if (!arrays[use_id].available) { // if selected is in use
+      freeArray(use_id);
     }
+    arrays[use_id].size = num;
+    arrays[use_id].available = 0;
+    arrays[use_id].data = (char *) malloc(num * sizeof(float));
+    memset(arrays[use_id].data,0,num * sizeof(float));
+    arrays[use_id].type = FLOAT_TYPE;
   } else {
-    /* if we get here we have claimed a slot in error and
-     * potentially freed an array incorrectly
+    /*
+     * Unsupported type
      */
-    arrays[use_id].available = 1;
-    arrays[use_id].size = 0;
     xil_printf("type %s not yet supported\n\r", args[1]);
     return 0;
   }
+  return 1;
+}
+
+int cf_cmd(int n, char **args) {
+  Xil_DCacheFlush();
+  return 1;
+}
+
+int ci_cmd(int n, char **args) {
+  Xil_DCacheInvalidate();
   return 1;
 }
 
@@ -372,7 +521,10 @@ int (*cmd_func[])(int, char **) = {
   &mread_cmd,
   &mwrite_cmd,
   &show_cmd,
-  &loadArray_cmd
+  &loadArray_cmd,
+  &mkArray_cmd,
+  &cf_cmd,
+  &ci_cmd
 };
 
 
@@ -459,9 +611,6 @@ int main()
   char *cmd_buffer;
   size_t  cmd_buffer_size = 512;
 
-  const int scratch_size = 512;
-  char *scratch;
-
   char **tokens;
   int n = 0;
   int status = 0;
@@ -469,9 +618,10 @@ int main()
 
   init_platform();
 
+  init_app();
+
   /* Initialisation */
   cmd_buffer = malloc(cmd_buffer_size * sizeof(char));
-  scratch = malloc(scratch_size * sizeof(char));
   tokens = malloc(max_tokens * sizeof(char*));
 
   /* Initialise array storage */
@@ -484,7 +634,6 @@ int main()
 
   /* Print the welcome text */
   xil_printf("%s", header);
-  xil_printf("Scratch memory: %x\n\r", (unsigned int)scratch);
 
   /* The command parsing and executing loop */
   while(running) {

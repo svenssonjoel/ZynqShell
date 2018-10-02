@@ -3,7 +3,7 @@ Shell like program to run on the, bare-metal, Zynq while experimenting. The idea
 upload data, start computations on the FPGA and inspect results. I suspect there is a fair bit of a reusable core of this but
 that for specific experiments, tweaks will be needed.
 
-#Functionality
+# Functionality
 1. Create arrays.
 2. Show contents of arrays.
 3. Load data into an array over the serial connection to the shell running on the Zynq. Each line of text transmitted will be interpreted by the shell as a given type. I like to use screen as terminal that has the capability to paste in larger amounts of data.

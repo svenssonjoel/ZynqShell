@@ -9,6 +9,9 @@ that for specific experiments, tweaks will be needed.
 3. Load data into an array over the serial connection to the shell running on the Zynq. Each line of text transmitted will be interpreted by the shell as a given type. I like to use screen as terminal that has the capability to paste in larger amounts of data.
 4. Read/Write to arbitrary memory locations while interpreting what is read/written as a C-type (int, unsigned int, float).
 
+# Planned functionality
+1. load and store files to FAT formatted SD card.  
+
 # Howto
-I currently build this by creating a "hello world" application in Vivado SDK and replace the helloworld.c file there with 
+I currently build ZynqShell by creating a "hello world" application in Vivado SDK and replace the helloworld.c file there with 
 the zynqshell.c file (ln -s to the file in the repo clone). 

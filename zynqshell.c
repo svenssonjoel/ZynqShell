@@ -32,6 +32,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#include "ff.h"
+#include "ffconf.h"
+
 /* PROTOS */
 int inputline(char *buffer, int size);
 
@@ -49,9 +52,18 @@ void init_app() {
 
 
 /* ************************************************************
+ * CONFIGURATION
+ * ********************************************************* */
+#define USE_SD
+
+/* ************************************************************
  * Globals
  * ********************************************************* */
 int running = 1; /* Start out in running state */
+
+#ifdef USE_SD
+FATFS fat_fs;
+#endif
 
 #define BYTE_TYPE 0
 #define INT_TYPE 1
@@ -513,6 +525,36 @@ int ci_cmd(int n, char **args) {
   return 1;
 }
 
+/* ************************************************************
+ * FatFS, Files, Directories
+ * ********************************************************* */
+#ifdef USE_SD
+
+FRESULT ls(char* path){
+  FRESULT res;
+  DIR dir;
+  UINT i;
+  static FILINFO fno;
+
+  res = f_opendir(&dir, path);
+  if (res == FR_OK) {
+    for (;;) {
+      res = f_readdir(&dir, &fno);
+      if (res != FR_OK || fno.fname[0] == 0) break;
+      xil_printf("%s/%s\n\r", path, fno.fname);
+    }
+    f_closedir(&dir);
+  }
+  return res;
+}
+
+
+
+#endif
+/* ************************************************************
+ * Command function array
+ * ********************************************************* */
+
 /* Array of command functions */
 int (*cmd_func[])(int, char **) = {
   &help_cmd,
@@ -610,6 +652,7 @@ int main()
 {
   char *cmd_buffer;
   size_t  cmd_buffer_size = 512;
+  int result;
 
   char **tokens;
   int n = 0;
@@ -620,9 +663,50 @@ int main()
 
   init_app();
 
+  /* Print the welcome text */
+  xil_printf("%s", header);
+
   /* Initialisation */
   cmd_buffer = malloc(cmd_buffer_size * sizeof(char));
   tokens = malloc(max_tokens * sizeof(char*));
+
+#ifdef USE_SD
+  /* Initialise file system */
+  result = f_mount(&fat_fs,"0:", 0);
+  if (result != FR_OK) {
+    xil_printf("Error mounting file system!\n\r");
+  } else {
+    xil_printf("File system successfully mounted\n\r");
+  }
+/*
+  FIL fp;
+  int r;
+  r = f_open(&fp, "0:b.txt", FA_WRITE | FA_CREATE_ALWAYS);
+  if (r != FR_OK) {
+     xil_printf("Error opening file for writing\n\r");
+     xil_printf("%d\n\r",r);
+  } else {
+    f_close(&fp);
+  }
+
+  r = f_open(&fp, "0:a.txt", FA_READ);
+  if ( r != FR_OK) {
+    xil_printf("Error opening file\n\r");
+    xil_printf("%d\n\r",r);
+  } else {
+    xil_printf("File opened!\n\r");
+    char buffer[256];
+    unsigned int rd = 0;
+    f_read(&fp, &buffer, 256, &rd);
+    xil_printf("%s", buffer);
+    f_close(&fp);
+  }
+
+
+  char path[1024] = "";
+  ls(path);
+*/
+#endif
 
   /* Initialise array storage */
   for (i = 0; i < MAX_ALLOCATED_ARRAYS; i ++) {
@@ -631,9 +715,6 @@ int main()
     arrays[i].type = BYTE_TYPE;
     arrays[i].size = 0;
   }
-
-  /* Print the welcome text */
-  xil_printf("%s", header);
 
   /* The command parsing and executing loop */
   while(running) {

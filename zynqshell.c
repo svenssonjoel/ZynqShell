@@ -62,7 +62,10 @@ void init_app() {
 int running = 1; /* Start out in running state */
 
 #ifdef USE_SD
+#define MAX_PATH 256
 FATFS fat_fs;
+int sd_ok = 0; /* assume not ok to begin with */
+char pwd[MAX_PATH] = "";
 #endif
 
 #define BYTE_TYPE 0
@@ -99,7 +102,8 @@ const char *cmds[] = {"help",
                       "loadArray",
                       "mkArray",
                       "cf",
-                      "ci"
+                      "ci",
+                      "ls"
                       };
 
 const char *hlp_str =
@@ -548,7 +552,57 @@ FRESULT ls(char* path){
   return res;
 }
 
+int ls_cmd(int n, char **args) {
 
+  /* ignores all arguments, if any */
+  ls(pwd);
+
+  return 1;
+}
+
+int load_raw(char *path, int array_id) {
+
+  FIL fp;
+  int r;
+  int size;
+
+  r = f_open(&fp, path, FA_READ);
+  if ( r != FR_OK) {
+    xil_printf("Error opening file\n\r");
+    return 0;
+  } else {
+
+    size = file_size(&fp);
+
+    /* check if array is free or used */
+    if (!arrays[array_id].available) {
+      free(arrays[array_id].data);
+    }
+
+    /* allocate storage for data from file */
+    if ((arrays[array_id].data = (char*)malloc(size))) {
+      arrays[array_id].available = 0;
+      arrays[array_id].type = BYTE_TYPE;
+      arrays[array_id].size = size;
+    } else {
+      xil_printf("Error allocating memory for file contents\n\r");
+      return 0;
+    }
+
+    unsigned int rd = 0;
+    f_read(&fp, arrays[array_id].data, size, &rd);
+    f_close(&fp);
+  }
+
+  return 1;
+}
+
+int load_raw_cmd(int n, char **args) {
+
+  /* TODO: Implement */
+
+  return 1;
+}
 
 #endif
 /* ************************************************************
@@ -557,16 +611,19 @@ FRESULT ls(char* path){
 
 /* Array of command functions */
 int (*cmd_func[])(int, char **) = {
-  &help_cmd,
-  &exit_cmd,
-  &exit_cmd,
-  &mread_cmd,
-  &mwrite_cmd,
-  &show_cmd,
-  &loadArray_cmd,
-  &mkArray_cmd,
-  &cf_cmd,
-  &ci_cmd
+  &help_cmd
+  ,&exit_cmd
+  ,&exit_cmd
+  ,&mread_cmd
+  ,&mwrite_cmd
+  ,&show_cmd
+  ,&loadArray_cmd
+  ,&mkArray_cmd
+  ,&cf_cmd
+  ,&ci_cmd
+#ifdef USE_SD
+  ,&ls_cmd
+#endif
 };
 
 
@@ -677,35 +734,9 @@ int main()
     xil_printf("Error mounting file system!\n\r");
   } else {
     xil_printf("File system successfully mounted\n\r");
-  }
-/*
-  FIL fp;
-  int r;
-  r = f_open(&fp, "0:b.txt", FA_WRITE | FA_CREATE_ALWAYS);
-  if (r != FR_OK) {
-     xil_printf("Error opening file for writing\n\r");
-     xil_printf("%d\n\r",r);
-  } else {
-    f_close(&fp);
+    sd_ok = 1;
   }
 
-  r = f_open(&fp, "0:a.txt", FA_READ);
-  if ( r != FR_OK) {
-    xil_printf("Error opening file\n\r");
-    xil_printf("%d\n\r",r);
-  } else {
-    xil_printf("File opened!\n\r");
-    char buffer[256];
-    unsigned int rd = 0;
-    f_read(&fp, &buffer, 256, &rd);
-    xil_printf("%s", buffer);
-    f_close(&fp);
-  }
-
-
-  char path[1024] = "";
-  ls(path);
-*/
 #endif
 
   /* Initialise array storage */

@@ -93,17 +93,20 @@ const int max_tokens = 20; /* Maximum number of tokens*/
 const char *header = "ZynqShell\n\rtyping \"help\" shows a list of applicable commands\n\r";
 const char *tokdelim = "\n\t\r ";
 
-const char *cmds[] = {"help",
-                      "exit",
-                      "q",
-                      "mread",
-                      "mwrite",
-                      "show",
-                      "loadArray",
-                      "mkArray",
-                      "cf",
-                      "ci",
-                      "ls"
+const char *cmds[] = {"help"
+                      ,"exit"
+                      ,"q"
+                      ,"mread"
+                      ,"mwrite"
+                      ,"show"
+                      ,"loadArray"
+                      ,"mkArray"
+                      ,"cf"
+                      ,"ci"
+#ifdef USE_SD
+                      ,"ls"
+                      ,"sdLoad"
+#endif
                       };
 
 const char *hlp_str =
@@ -203,6 +206,7 @@ int mread_cmd(int n, char **args) {
 
 
   for (i = 0; i < num_elts; i++) {
+
     if (strcmp(args[1], "int") == 0) {
       xil_printf("%d\n\r", *(int*) (address + i * sizeof(int)));
     } else if (strcmp(args[1], "uint") == 0) {
@@ -212,6 +216,8 @@ int mread_cmd(int n, char **args) {
       char tmp[128];
       snprintf(tmp, 128, "%f", *(float*) (address + i * sizeof(float)));
       xil_printf("%s\n\r", tmp);
+    } else if (strcmp(args[1], "byte") == 0) {
+      xil_printf("%d\n\r", *(unsigned char*) (address + i));
     } else {
       xil_printf("Incorrect type specifier\n\r");
     }
@@ -597,10 +603,24 @@ int load_raw(char *path, int array_id) {
   return 1;
 }
 
-int load_raw_cmd(int n, char **args) {
+int sd_load_raw_cmd(int n, char **args) {
 
-  /* TODO: Implement */
+  int array_id = 0;
+  char path[MAX_PATH];
 
+  if (n < 3 || n > 3) {
+    xil_printf(
+        "Wrong number of arguments!\n\rUsage:  sdLoad <filename> <Array ID>\n\r");
+    return 0;
+  }
+
+  array_id = atoi(args[2]);
+
+  strncpy(path,pwd,MAX_PATH);
+  strncat(path,args[1],MAX_PATH - strlen(path));
+
+  xil_printf("Loading file: %s\n\r", path);
+  load_raw(path,array_id);
   return 1;
 }
 
@@ -623,6 +643,7 @@ int (*cmd_func[])(int, char **) = {
   ,&ci_cmd
 #ifdef USE_SD
   ,&ls_cmd
+  ,sd_load_raw_cmd
 #endif
 };
 

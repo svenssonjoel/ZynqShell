@@ -18,4 +18,6 @@ the zynqshell.c file (ln -s to the file in the repo clone).
 
 # ZynqBerry SD configuration in Vivado
 
+Note that this is probably different for other boards, so consult the datasheets.
+
 ![sdconf](/pictures/zynqberry_sd_config.png)

@@ -43,7 +43,7 @@ int inputline(char *buffer, int size);
  * ********************************************************* */
 
 #define CONTROL    (0x43c00000)
-#define INPUT_REG  (0x43c00008)
+#define INPUT_REG  (0x43c00010)
 #define OUTPUT_REG (0x43c00018)
 
 void init_app() {
@@ -74,6 +74,7 @@ char pwd[MAX_PATH] = "";
 #define FLOAT_TYPE 3
 
 const char *type_str[] = { "byte", "int", "uint", "float" };
+const int  type_size[] = { 1, 4, 4, 4 };
 
 #define MAX_ALLOCATED_ARRAYS 20
 typedef struct {
@@ -106,6 +107,7 @@ const char *cmds[] = {"help"
 #ifdef USE_SD
                       ,"ls"
                       ,"sdLoad"
+                      ,"sdStore"
 #endif
                       };
 
@@ -129,6 +131,8 @@ const char *hlp_str =
   "     Will expext <num_elements> lines of input containing\n\r"\
   "     data that is parseable as <type>\n\r"\
   "mkArray <type> <num_elements> [ID] - allocate an array\n\r"\
+  "sdLoad <filename> <array_id>\n\r"\
+  "sdStore <filename> <array_id>\n\r"\
   "cf - cache flush\n\r"\
   "ci - cache invalidate\n\r"\
   "----------------------------------------------------------------------\n\r";
@@ -624,6 +628,62 @@ int sd_load_raw_cmd(int n, char **args) {
   return 1;
 }
 
+
+int store_raw(char *path, int array_id) {
+
+  FIL fp;
+  int r;
+  int size;
+
+  if(arrays[array_id].available) {
+    xil_printf("Error: input array is not in use\n\r");
+    return 0;
+  }
+
+  size = arrays[array_id].size * (type_size[arrays[array_id].type]);
+
+  r = f_open(&fp, path, FA_WRITE | FA_CREATE_NEW);
+  if ( r != FR_OK) {
+    xil_printf("Error: %d\n\r", r);
+    return 0;
+  } else {
+
+    unsigned int wrt = 0;
+    f_write(&fp, arrays[array_id].data, size, &wrt);
+    f_close(&fp);
+    printf("%d Bytes written to file\n\r",wrt);
+  }
+  return 1;
+}
+
+/* sdStore <filename> <array_id>*/
+int sd_store_raw_cmd(int n, char **args) {
+
+  int array_id = 0;
+  char path[MAX_PATH];
+
+  if (n < 3 || n > 3) {
+    xil_printf(
+        "Wrong number of arguments!\n\rUsage:  sdStore <filename> <Array ID>\n\r");
+    return 0;
+  }
+
+  array_id = atoi(args[2]);
+  if (array_id < 0 || array_id > MAX_ALLOCATED_ARRAYS) {
+    xil_printf("Error: Faulty array ID\n\r");
+    return 0;
+  }
+
+  strncpy(path,pwd,MAX_PATH);
+  strncat(path,args[1],MAX_PATH - strlen(path));
+
+  xil_printf("Storing to file: %s\n\r", path);
+
+  store_raw(path,array_id);
+
+  return 1;
+}
+
 #endif
 /* ************************************************************
  * Command function array
@@ -643,7 +703,8 @@ int (*cmd_func[])(int, char **) = {
   ,&ci_cmd
 #ifdef USE_SD
   ,&ls_cmd
-  ,sd_load_raw_cmd
+  ,&sd_load_raw_cmd
+  ,&sd_store_raw_cmd
 #endif
 };
 

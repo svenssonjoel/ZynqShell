@@ -15,3 +15,7 @@ upload data, start computations on the FPGA and inspect results.
 # Howto
 I currently build ZynqShell by creating a "hello world" application in Vivado SDK and replace the helloworld.c file there with 
 the zynqshell.c file (ln -s to the file in the repo clone). 
+
+#ZynqBerry SD configuration in Vivado
+
+![sdconf](https://www.github.com/svenssonjoel/ZynqShell/pictures/zynqberry_sd_config.png)

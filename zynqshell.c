@@ -249,7 +249,7 @@ int mwrite_cmd(int n, char **args) {
     } else {
       val = atoi(args[3]);
     }
-    *(int*) address = val;
+    *(volatile int*) address = val;
     Xil_DCacheFlushRange(address, sizeof(int));
 
   } else if (strcmp(args[1], "uint") == 0) {
@@ -259,10 +259,10 @@ int mwrite_cmd(int n, char **args) {
     } else {
       val = atoi(args[3]);
     }
-    *(unsigned int*) address = val;
+    *(volatile unsigned int*) address = val;
     Xil_DCacheFlushRange(address, sizeof(unsigned int));
   } else if (strcmp(args[1], "float") == 0) {
-    *(float*) address = atof(args[3]);
+    *(volatile float*) address = atof(args[3]);
     Xil_DCacheFlushRange(address, sizeof(float));
   } else {
     xil_printf("Incorrect type specifier\n\r");
@@ -450,8 +450,8 @@ int loadArray_cmd(int n, char **args) {
   dsb();
   //xil_printf("flushing %d bytes at address %x\n\r", bytes, (unsigned int)arrays[use_id].data);
   xil_printf("flushing cache\n\r");
-  //Xil_DCacheFlushRange((unsigned int)arrays[use_id].data, bytes);
-  Xil_DCacheFlush();
+  Xil_DCacheFlushRange((unsigned int)arrays[use_id].data, bytes);
+  //Xil_DCacheFlush();
 
   return 1;
 }
@@ -547,7 +547,6 @@ int ci_cmd(int n, char **args) {
 FRESULT ls(char* path){
   FRESULT res;
   DIR dir;
-  UINT i;
   static FILINFO fno;
 
   res = f_opendir(&dir, path);

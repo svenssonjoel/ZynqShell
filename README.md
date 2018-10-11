@@ -27,8 +27,8 @@ Note that this is probably different for other boards, so consult the datasheets
 Example: "CTRL+a :" means "CTRL" and "a" together, followed by an ":". This particular command brings up a prompt where
 additional commands can be given:
 1. "quit" exists from screen
-2. "readreg <regname> <filename>" reads a file into a named <regname> storage location in screen.
-3. "paste <regname>" pastes the contents of the named <regname> storage location into the scren session.
+2. "readreg regname filename" reads a file into a named "regname" storage location in screen.
+3. "paste regname" pastes the contents of the named "regname" storage location into the screen session.
 
 The readreg and paste commands can be used to send the contents into a ZynqShell array when using the ZynqShell loadArray command.
 

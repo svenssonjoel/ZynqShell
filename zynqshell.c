@@ -47,7 +47,10 @@ int inputline(char *buffer, int size);
 #define OUTPUT_REG (0x43c00018)
 
 void init_app() {
-  Xil_SetTlbAttributes(CONTROL, 0x10c06);
+  /* There are attributes defined in xil_mmu.h now.
+   * I've been setting this far from correct in the past, it seems
+   */
+  Xil_SetTlbAttributes(CONTROL, NORM_NONCACHE);
 }
 
 

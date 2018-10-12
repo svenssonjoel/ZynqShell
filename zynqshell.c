@@ -116,28 +116,28 @@ const char *cmds[] = {"help"
 
 const char *hlp_str =
   "----------------------------------------------------------------------\n\r"\
-  "help [about] - (with no arguments) Displays this message\n\r"\
-  "      Valid abouts: Currently no valid abouts\n\r"\
+  "help [about] - (with no arguments) Displays this message.\n\r"\
+  "      Valid abouts: Currently no valid abouts.\n\r"\
   "exit - Exits from ZynqShell\n\r"\
   "mread <type> <address> [num_elements] - \n\r"\
   "      Read data from memory location <address> and interpret it as\n\r"\
   "      type <type>.\n\r"\
-  "      Valid types: int - 32bit signed integer\n\r"\
-  "                   uint - 32bit unsigned integer\n\r"\
-  "                   float - 32bit floating point\n\r"\
+  "      Valid types: int - 32bit signed integer.\n\r"\
+  "                   uint - 32bit unsigned integer.\n\r"\
+  "                   float - 32bit floating point.\n\r"\
   "mwrite <type> <address> <value>\n\r"\
   "show <what> - \n\r"\
   "     show information about <what>. \n\r"\
-  "     Valid whats: arrays -  show information about allocated arrays\n\r"\
-  "                  array <id> - show array <id>\n\r"\
-  "loadArray <type> <num_elements> [ID] - Load elements into an array\n\r"\
+  "     Valid whats: arrays -  show information about allocated arrays.\n\r"\
+  "                  array <id> - show array <id>.\n\r"\
+  "loadArray <type> <num_elements> [ID] - Load elements into an array.\n\r"\
   "     Will expext <num_elements> lines of input containing\n\r"\
-  "     data that is parseable as <type>\n\r"\
-  "mkArray <type> <num_elements> [ID] - allocate an array\n\r"\
-  "sdLoad <filename> <array_id>\n\r"\
-  "sdStore <filename> <array_id>\n\r"\
-  "cf - cache flush\n\r"\
-  "ci - cache invalidate\n\r"\
+  "     data that is parseable as <type>.\n\r"\
+  "mkArray <type> <num_elements> [ID] - Allocate an array.\n\r"\
+  "sdLoad <filename> <array_id> - Load a file from sd card into array of given id.\n\r"\
+  "sdStore <filename> <array_id> - Store array of given id into file.\n\r"\
+  "cf - Cache flush.\n\r"\
+  "ci - Cache invalidate.\n\r"\
   "----------------------------------------------------------------------\n\r";
 
 /* ************************************************************
@@ -315,7 +315,7 @@ int printArray(int id) {
     xil_printf("Unsupported type\n\r");
     return 0;
   }
-  Xil_DCacheFlushRange((unsigned int)arrays[id].data, bytes);
+  Xil_DCacheInvalidateRange((unsigned int)arrays[id].data, bytes);
   for (i = 0; i < arrays[id].size; i ++) {
     printer(arrays[id].data, i);
     xil_printf("\n\r");

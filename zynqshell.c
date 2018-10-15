@@ -28,6 +28,8 @@
 #include "xil_cache_l.h"
 #include "xil_io.h"
 
+#include "xdevcfg.h"
+
 #include <malloc.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -39,7 +41,7 @@
 int inputline(char *buffer, int size);
 
 /* ************************************************************
- * Application specific
+ * Application specific (To be removed)
  * ********************************************************* */
 
 #define CONTROL    (0x43c00000)

@@ -10,7 +10,8 @@ upload data, start computations on the FPGA and inspect results.
 5. Load and store data from/to files on SD card.
 
 # TODO
-- Figure out more exactly where and when to flush caches and what ranges (useful when the next entity to read that value is the FPGA). 
+- Figure out more exactly where and when to flush caches and what ranges (useful when the next entity to read that value is the FPGA).
+- Load FPGA configuration "bin files" and change the FPGA configuration at runtime. 
  
 # Howto Build
 I currently build ZynqShell by creating a "hello world" application in Vivado SDK and replace the helloworld.c file there with 

@@ -11,7 +11,7 @@ upload data, start computations on the FPGA and inspect results.
 
 # TODO
 - Figure out more exactly where and when to flush caches and what ranges (useful when the next entity to read that value is the FPGA).
-- Load FPGA configuration "bin files" and change the FPGA configuration at runtime. 
+- Load FPGA configuration "bin files" and change the FPGA configuration at runtime (using devcfg). 
  
 # Howto Build
 I currently build ZynqShell by creating a "hello world" application in Vivado SDK and replace the helloworld.c file there with 

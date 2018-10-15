@@ -41,6 +41,14 @@
 int inputline(char *buffer, int size);
 
 /* ************************************************************
+ * DEFINES
+ * ********************************************************* */
+#define SUCCESS 1
+#define FAILURE 0
+
+#define DCFG_DEVICE_ID  XPAR_XDCFG_0_DEVICE_ID
+
+/* ************************************************************
  * Application specific (To be removed)
  * ********************************************************* */
 
@@ -65,6 +73,8 @@ void init_app() {
  * Globals
  * ********************************************************* */
 int running = 1; /* Start out in running state */
+
+XDcfg DcfgInstance; /* Device configuration "instance" */
 
 #ifdef USE_SD
 #define MAX_PATH 256
@@ -114,6 +124,7 @@ const char *cmds[] = {"help"
                       ,"sdLoad"
                       ,"sdStore"
 #endif
+                      ,"programFPGA"
                       };
 
 const char *hlp_str =
@@ -138,6 +149,8 @@ const char *hlp_str =
   "mkArray <type> <num_elements> [ID] - Allocate an array.\n\r"\
   "sdLoad <filename> <array_id> - Load a file from sd card into array of given id.\n\r"\
   "sdStore <filename> <array_id> - Store array of given id into file.\n\r"\
+  "programFPGA <array_id> - Program FPGA using data stored in array.\n\r"\
+  "     Contents of array should be a valid FPGA configuration bitstream."\
   "cf - Cache flush.\n\r"\
   "ci - Cache invalidate.\n\r"\
   "----------------------------------------------------------------------\n\r";
@@ -155,11 +168,12 @@ int freeArray(int id) {
       arrays[id].size = 0;
       arrays[id].type = BYTE_TYPE;
     }
-    return 1;
+    return SUCCESS;
   }
-  return 0;
+  return FAILURE;
 }
 
+/* TODO: Some kind of success/failure checking, maybe? */
 void freeArrays() {
   int i = 0;
   for (i = 0; i < MAX_ALLOCATED_ARRAYS; i ++) {
@@ -174,9 +188,10 @@ void freeArrays() {
 
 int exit_cmd(int n, char **args) {
   running = 0;
-  return 1;
+  return SUCCESS;
 }
 
+/* prints help message. Always returns success */
 int help_cmd(int n, char **args) {
 
   if (n < 1 || n > 2) {
@@ -187,7 +202,7 @@ int help_cmd(int n, char **args) {
   } else {
     xil_printf("%s", hlp_str);
   }
-  return 1;
+  return SUCCESS;
 }
 
 int mread_cmd(int n, char **args) {
@@ -199,7 +214,7 @@ int mread_cmd(int n, char **args) {
   if (n < 3 || n > 4) {
     xil_printf(
         "Wrong number of arguments!\n\rUsage: mread <type> <address>\n\r");
-    return 0;
+    return FAILURE;
   }
 
   sscanf(args[2], "%x", &address);
@@ -208,7 +223,7 @@ int mread_cmd(int n, char **args) {
   if (n == 4) {
     num_elts = atoi(args[3]);
     if (num_elts < 1)
-      return 0;
+      return FAILURE;
   }
 
   Xil_DCacheFlushRange(address, num_elts * 4); /* TODO fix */
@@ -229,9 +244,10 @@ int mread_cmd(int n, char **args) {
       xil_printf("%d\n\r", *(unsigned char*) (address + i));
     } else {
       xil_printf("Incorrect type specifier\n\r");
+      return FAILURE;
     }
   }
-  return 1;
+  return SUCCESS;
 }
 
 int mwrite_cmd(int n, char **args) {
@@ -241,7 +257,7 @@ int mwrite_cmd(int n, char **args) {
   if (n < 4 || n > 4) {
     xil_printf(
         "Wrong number of arguments!\n\rUsage: mwrite <type> <address> <value>\n\r");
-    return 0;
+    return FAILURE;
   }
 
   sscanf(args[2], "%x", &address);
@@ -271,9 +287,10 @@ int mwrite_cmd(int n, char **args) {
     Xil_DCacheFlushRange(address, sizeof(float));
   } else {
     xil_printf("Incorrect type specifier\n\r");
+    return FAILURE;
   }
 
-  return 1;
+  return SUCCESS;
 }
 
 void printByte(char *ptr, int i) {
@@ -315,14 +332,15 @@ int printArray(int id) {
     break;
   default:
     xil_printf("Unsupported type\n\r");
-    return 0;
+    return FAILURE;
   }
+
   Xil_DCacheInvalidateRange((unsigned int)arrays[id].data, bytes);
   for (i = 0; i < arrays[id].size; i ++) {
     printer(arrays[id].data, i);
     xil_printf("\n\r");
   }
-  return 1;
+  return SUCCESS;
 }
 
 int show_cmd(int n, char **args) {
@@ -331,7 +349,7 @@ int show_cmd(int n, char **args) {
 
   if (n < 2 ) {
     xil_printf("Wrong number of arguments!\n\rUsage: show <what>\n\r");
-    return 0;
+    return FAILURE;
   }
 
   if (strcmp(args[1], "arrays") == 0) {
@@ -345,7 +363,7 @@ int show_cmd(int n, char **args) {
 
     if (n < 3) {
       xil_printf("Requires an ArrayID argument!\n\r");
-      return 0;
+      return FAILURE;
     }
     int id = atoi(args[2]);
     if (arrays[id].available) {
@@ -357,7 +375,7 @@ int show_cmd(int n, char **args) {
   } else {
     xil_printf("No information available on %s\n\r", args[1]);
   }
-  return 1;
+  return SUCCESS;
 
 }
 
@@ -372,7 +390,7 @@ int loadArray_cmd(int n, char **args) {
   if (n < 3 || n > 4) {
     xil_printf(
         "Wrong number of arguments!\n\rUsage: loadArray <type> <num_elements> [ID]\n\r");
-    return 0;
+    return FAILURE;
   }
 
   num = atoi(args[2]);
@@ -381,7 +399,7 @@ int loadArray_cmd(int n, char **args) {
 
     if (use_id < 0 || use_id > MAX_ALLOCATED_ARRAYS) {
       xil_printf("Incorrect array id!\n\r");
-      return 0;
+      return FAILURE;
     }
   } else { /* find free array slot */
     for (i = 0; i < MAX_ALLOCATED_ARRAYS; i++) {
@@ -393,7 +411,7 @@ int loadArray_cmd(int n, char **args) {
   }
   if (use_id == -1) {
     xil_printf("No available array slot\n\r");
-    return 0;
+    return FAILURE;
   }
 
   /* If we arrive here, we have selected a slot */
@@ -450,7 +468,7 @@ int loadArray_cmd(int n, char **args) {
     //arrays[use_id].available = 1;
     //arrays[use_id].size = 0;
     xil_printf("type %s not yet supported\n\r", args[1]);
-    return 0;
+    return FAILURE;
   }
   dsb();
   //xil_printf("flushing %d bytes at address %x\n\r", bytes, (unsigned int)arrays[use_id].data);
@@ -458,7 +476,7 @@ int loadArray_cmd(int n, char **args) {
   Xil_DCacheFlushRange((unsigned int)arrays[use_id].data, bytes);
   //Xil_DCacheFlush();
 
-  return 1;
+  return SUCCESS;
 }
 
 int mkArray_cmd(int n, char **args) {
@@ -469,7 +487,7 @@ int mkArray_cmd(int n, char **args) {
   if (n < 3 || n > 4) {
     xil_printf(
             "Wrong number of arguments!\n\rUsage: mkArray <type> <num_elements> [ID]\n\r");
-        return 0;
+        return FAILURE;
   }
 
   num = atoi(args[2]);
@@ -479,7 +497,7 @@ int mkArray_cmd(int n, char **args) {
 
     if (use_id < 0 || use_id > MAX_ALLOCATED_ARRAYS) {
       xil_printf("Incorrect array id!\n\r");
-      return 0;
+      return FAILURE;
     }
     /* free the array */
     freeArray(use_id);
@@ -494,7 +512,7 @@ int mkArray_cmd(int n, char **args) {
   }
   if (use_id == -1) {
     xil_printf("No available array slot\n\r");
-    return 0;
+    return FAILURE;
   }
 
   if (strcmp(args[1], "int") == 0) {
@@ -529,19 +547,19 @@ int mkArray_cmd(int n, char **args) {
      * Unsupported type
      */
     xil_printf("type %s not yet supported\n\r", args[1]);
-    return 0;
+    return FAILURE;
   }
-  return 1;
+  return SUCCESS;
 }
 
 int cf_cmd(int n, char **args) {
   Xil_DCacheFlush();
-  return 1;
+  return SUCCESS;
 }
 
 int ci_cmd(int n, char **args) {
   Xil_DCacheInvalidate();
-  return 1;
+  return SUCCESS;
 }
 
 /* ************************************************************
@@ -567,11 +585,12 @@ FRESULT ls(char* path){
 }
 
 int ls_cmd(int n, char **args) {
-
+  FRESULT res;
   /* ignores all arguments, if any */
-  ls(pwd);
+  res = ls(pwd);
+  if (res != FR_OK) return FAILURE;
 
-  return 1;
+  return SUCCESS;
 }
 
 int load_raw(char *path, int array_id) {
@@ -583,7 +602,7 @@ int load_raw(char *path, int array_id) {
   r = f_open(&fp, path, FA_READ);
   if ( r != FR_OK) {
     xil_printf("Error opening file\n\r");
-    return 0;
+    return FAILURE;
   } else {
 
     size = file_size(&fp);
@@ -600,7 +619,7 @@ int load_raw(char *path, int array_id) {
       arrays[array_id].size = size;
     } else {
       xil_printf("Error allocating memory for file contents\n\r");
-      return 0;
+      return FAILURE;
     }
 
     unsigned int rd = 0;
@@ -608,7 +627,7 @@ int load_raw(char *path, int array_id) {
     f_close(&fp);
   }
 
-  return 1;
+  return SUCCESS;
 }
 
 int sd_load_raw_cmd(int n, char **args) {
@@ -619,7 +638,7 @@ int sd_load_raw_cmd(int n, char **args) {
   if (n < 3 || n > 3) {
     xil_printf(
         "Wrong number of arguments!\n\rUsage:  sdLoad <filename> <Array ID>\n\r");
-    return 0;
+    return FAILURE;
   }
 
   array_id = atoi(args[2]);
@@ -629,7 +648,7 @@ int sd_load_raw_cmd(int n, char **args) {
 
   xil_printf("Loading file: %s\n\r", path);
   load_raw(path,array_id);
-  return 1;
+  return SUCCESS;
 }
 
 
@@ -641,7 +660,7 @@ int store_raw(char *path, int array_id) {
 
   if(arrays[array_id].available) {
     xil_printf("Error: input array is not in use\n\r");
-    return 0;
+    return FAILURE;
   }
 
   size = arrays[array_id].size * (type_size[arrays[array_id].type]);
@@ -649,7 +668,7 @@ int store_raw(char *path, int array_id) {
   r = f_open(&fp, path, FA_WRITE | FA_CREATE_NEW);
   if ( r != FR_OK) {
     xil_printf("Error: %d\n\r", r);
-    return 0;
+    return FAILURE;
   } else {
 
     unsigned int wrt = 0;
@@ -657,7 +676,7 @@ int store_raw(char *path, int array_id) {
     f_close(&fp);
     printf("%d Bytes written to file\n\r",wrt);
   }
-  return 1;
+  return SUCCESS;
 }
 
 /* sdStore <filename> <array_id>*/
@@ -669,13 +688,13 @@ int sd_store_raw_cmd(int n, char **args) {
   if (n < 3 || n > 3) {
     xil_printf(
         "Wrong number of arguments!\n\rUsage:  sdStore <filename> <Array ID>\n\r");
-    return 0;
+    return FAILURE;
   }
 
   array_id = atoi(args[2]);
   if (array_id < 0 || array_id > MAX_ALLOCATED_ARRAYS) {
     xil_printf("Error: Faulty array ID\n\r");
-    return 0;
+    return FAILURE;
   }
 
   strncpy(path,pwd,MAX_PATH);
@@ -685,10 +704,90 @@ int sd_store_raw_cmd(int n, char **args) {
 
   store_raw(path,array_id);
 
-  return 1;
+  return SUCCESS;
 }
 
 #endif
+
+/* ************************************************************
+ * PROGRAM FPGA WITH BITSTREAM
+ * ********************************************************* */
+int program_bitstream(XDcfg *Instance, u32 StartAddress, u32 WordLength)
+{
+  int Status;
+  volatile u32 IntrStsReg = 0;
+
+  // Clear DMA and PCAP Done Interrupts
+  XDcfg_IntrClear(Instance, (XDCFG_IXR_DMA_DONE_MASK | XDCFG_IXR_D_P_DONE_MASK));
+
+  // Transfer bitstream from DDR into fabric in non secure mode
+  Status = XDcfg_Transfer(Instance, (u32 *) StartAddress, WordLength, (u32 *) XDCFG_DMA_INVALID_ADDRESS, 0, XDCFG_NON_SECURE_PCAP_WRITE);
+  if (Status != XST_SUCCESS)
+    return Status;
+
+  // Poll DMA Done Interrupt
+  while ((IntrStsReg & XDCFG_IXR_DMA_DONE_MASK) != XDCFG_IXR_DMA_DONE_MASK)
+    IntrStsReg = XDcfg_IntrGetStatus(Instance);
+
+  // Poll PCAP Done Interrupt
+  while ((IntrStsReg & XDCFG_IXR_D_P_DONE_MASK) != XDCFG_IXR_D_P_DONE_MASK)
+    IntrStsReg = XDcfg_IntrGetStatus(Instance);
+
+  return XST_SUCCESS;
+}
+
+int programFPGA_cmd(int n, char **args) {
+
+  int array_id;
+  XDcfg_Config *ConfigPtr;
+  int status;
+
+  if (n < 2 || n > 2) {
+    xil_printf(
+        "Wrong number of arguments!\n\rUsage:  programFPGA <Array ID>\n\r");
+    return FAILURE;
+  }
+
+  array_id = atoi(args[1]);
+
+  if (array_id < 0 || array_id >= MAX_ALLOCATED_ARRAYS) {
+    xil_printf("Incorrect Array ID\n\r");
+    return FAILURE;
+  }
+
+  if (arrays[array_id].available) {
+    xil_printf("Array is empty\n\r");
+    return FAILURE;
+  }
+
+  /* Maybe can be moved to some, run once, init procedure */
+  ConfigPtr = XDcfg_LookupConfig(DCFG_DEVICE_ID);
+
+  status = XDcfg_CfgInitialize(&DcfgInstance, ConfigPtr,
+            ConfigPtr->BaseAddr);
+  if (status != XST_SUCCESS) {
+    xil_printf("Failed to initialize DevCFG driver\n\r");
+    return FAILURE;
+  }
+  status = XDcfg_SelfTest(&DcfgInstance);
+  if (status != XST_SUCCESS) {
+    xil_printf("Failed DevCFG self test\n\r");
+    return FAILURE;
+  }
+
+  status = program_bitstream(&DcfgInstance,
+                             (u32)arrays[array_id].data,
+                             arrays[array_id].size >> 2);
+
+  if (status != XST_SUCCESS) {
+    xil_printf("Failed to program FPGA\n\r");
+    return FAILURE;
+  }
+  xil_printf("OK!\n\r");
+  return SUCCESS;
+}
+
+
 /* ************************************************************
  * Command function array
  * ********************************************************* */
@@ -710,6 +809,7 @@ int (*cmd_func[])(int, char **) = {
   ,&sd_load_raw_cmd
   ,&sd_store_raw_cmd
 #endif
+  ,&programFPGA_cmd
 };
 
 

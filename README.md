@@ -26,7 +26,19 @@ Note that this is probably different for other boards, so consult the datasheets
 
 # Howto generate a bin file from a bit file for programming of the FPGA
 
-TODO: Write down the steps. 
+1. Create a bif file, example below.
+2. Source your VIVADO configuration.
+3. Then run 'bootgen -image my.bif -w -process_bitstream bin'
+
+my.bif
+```
+bitToBin:
+{
+design_1_wrapper.bit
+}
+```
+The tag "bitToBin" seems that it can be set to just about anything without any difference. Within the brackets specify the
+name of your bit file (in this example design_1_wrapper.bit). 
 
 # Screen tips
 

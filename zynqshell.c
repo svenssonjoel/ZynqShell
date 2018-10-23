@@ -28,14 +28,26 @@
 #include "xil_cache_l.h"
 #include "xil_io.h"
 
+#include "xil_exception.h"
+#include "xscugic.h"
+#include "xgpio.h"
+
 #include "xdevcfg.h"
 
 #include <malloc.h>
 #include <stdlib.h>
 #include <stdio.h>
 
+/* ************************************************************
+ * CONFIGURATION
+ * ********************************************************* */
+#define USE_SD
+
+
+#ifdef USE_SD
 #include "ff.h"
 #include "ffconf.h"
+#endif
 
 /* PROTOS */
 int inputline(char *buffer, int size);
@@ -56,18 +68,122 @@ int inputline(char *buffer, int size);
 #define INPUT_REG  (0x43c00010)
 #define OUTPUT_REG (0x43c00018)
 
-void init_app() {
-  /* There are attributes defined in xil_mmu.h now.
-   * I've been setting this far from correct in the past, it seems
-   */
-  Xil_SetTlbAttributes(CONTROL, NORM_NONCACHE);
+#define CPU_BASEADDR XPAR_SCUGIC_CPU_BASEADDR
+#define DIST_BASEADDR XPAR_SCUGIC_DIST_BASEADDR
+
+#define DEFAULT_PRIORITY 0xa0a0a0a0UL
+#define DEFAULT_TARGET 01010101UL
+
+volatile u32 InterruptID = 0;
+volatile u32 irqProcessed = 0;
+
+XScuGic_Config *gic_config = NULL;
+XScuGic gic;
+
+
+void irqHandler(void *callbackRef) {
+  u32 BaseAddress;
+  u32 IntID;  /* interrupt id */
+
+  //XScuGic_Disable(&gic, 61);
+  Xil_ExceptionDisable();
+
+  *(volatile u32*)0x41200008 = 0x0;
+  Xil_Out32(0x41200008,0x0);
+  Xil_DCacheFlushRange(0x41200008, 4);
+
+
+  u32 r = XGpio_ReadReg(0x41200000, XGPIO_ISR_OFFSET);
+  XGpio_WriteReg(0x41200000, XGPIO_ISR_OFFSET, r & XGPIO_IR_MASK );
+
+  /* Disable interrupt in GPIO block */
+  //u32 Register = XGpio_ReadReg(0x41200000, XGPIO_IER_OFFSET);
+  //XGpio_WriteReg(0x41200000, XGPIO_IER_OFFSET,
+  //      Register &  ~XGPIO_IR_MASK);
+
+  IntID = XScuGic_ReadReg((u32)callbackRef, XSCUGIC_INT_ACK_OFFSET) & XSCUGIC_ACK_INTID_MASK;
+
+  xil_printf("Entering irqHandler\n\rID: %d \n\r", IntID);
+  xil_printf("irqHandler\n\r");
+
+  if (callbackRef == NULL) {
+    xil_printf("CallbackRef is NULL, returning\n\r");
+  }
+
+
+  //BaseAddress =  (u32)callbackRef;
+
+
+
+  //IntID = IntID & XSCUGIC_ACK_INTID_MASK;
+
+  xil_printf("Interrupt ID: %d\n\r", IntID);
+
+  //if (XSCUGIC_MAX_NUM_INTR_INPUTS < IntID) {
+  //  printf("ID > MAX_NUM_INTR_INPUTS \n\r");
+  //  return;
+ // }
+
+
+  //InterruptID = IntID;
+
+  irqProcessed++;
+
+  //XScuGic_Enable(&gic, 61);
+  Xil_ExceptionEnable();
+
 }
 
 
-/* ************************************************************
- * CONFIGURATION
- * ********************************************************* */
-#define USE_SD
+void init_app() {
+
+  int status;
+
+
+  //Xil_SetTlbAttributes(CONTROL, NORM_NONCACHE);
+  xil_printf("Initializing app specific settings\n\r");
+  /* GIC DIST INIT */
+
+  gic_config = XScuGic_LookupConfig(XPAR_PS7_SCUGIC_0_DEVICE_ID);
+  if (!gic_config) printf("ERROR looking up GIC config\n\r");
+
+
+  // Initialise the GIC using the config information
+  status = XScuGic_CfgInitialize(&gic, gic_config, gic_config->CpuBaseAddress);
+
+  if (status != XST_SUCCESS) printf ("ERROR initializing GIC configuration\n\r");
+
+
+  Xil_ExceptionRegisterHandler(XIL_EXCEPTION_ID_IRQ_INT,
+                      (Xil_ExceptionHandler)XScuGic_InterruptHandler, &gic);
+
+  Xil_ExceptionEnable();
+
+  status = XScuGic_Connect(&gic, 61,(Xil_ExceptionHandler)irqHandler,(void *)&gic);
+  if (status != XST_SUCCESS) printf ("ERROR connecting handler\n\r");
+
+  XScuGic_SetPriorityTriggerType(&gic,61,0, 0x3);
+
+
+  XScuGic_Enable(&gic, 61);
+
+  /* Setup the GPIO interrupt */
+  XGpio_WriteReg(0x41200000, XGPIO_GIE_OFFSET,
+        XGPIO_GIE_GINTR_ENABLE_MASK);
+
+  u32 Register = XGpio_ReadReg(0x41200000, XGPIO_IER_OFFSET);
+  XGpio_WriteReg(0x41200000, XGPIO_IER_OFFSET,
+        Register | XGPIO_IR_MASK);
+
+  xil_printf(" GPIO INTR: %u\n\r"); XGpio_ReadReg(0x41200000, XGPIO_IER_OFFSET);
+
+  /* Enable interrupt */
+  // XScuGic WriteReg(DIST_BASEADDR, XSCUGIC_ENABLE_SET_OFFSET +())
+
+  //u32 Mask = 0x00000001U << ( 28 % 32U);
+
+
+}
 
 /* ************************************************************
  * Globals
@@ -935,7 +1051,7 @@ int main()
 
   /* The command parsing and executing loop */
   while(running) {
-    xil_printf("%s ", prompt);
+    xil_printf("[%d]%s ", irqProcessed, prompt);
     inputline(cmd_buffer, cmd_buffer_size);
 
     xil_printf("\n\r");

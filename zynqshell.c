@@ -31,6 +31,8 @@
 #include "xil_exception.h"
 #include "xscugic.h"
 #include "xgpio.h"
+#include "xtime_l.h"
+#include "xtmrctr.h"
 
 #include "xdevcfg.h"
 
@@ -80,14 +82,32 @@ volatile u32 irqProcessed = 0;
 XScuGic_Config *gic_config = NULL;
 XScuGic gic;
 
+/* AXI TIMER */
+XTmrCtr_Config *tmr_config;
+XTmrCtr tmr;
+
+
+/* For response time experiments */
+XTime time_start;
+volatile XTime time_end;
+volatile int had_reply = 0;
+
+
+#define CLOCK_FREQ XPAR_PS7_CORTEXA9_0_CPU_CLK_FREQ_HZ
+#define MSEC_PER_SEC 1000
+#define USEC_PER_SEC 1000000
+#define NSEC_PER_SEC 1000000000
 
 void irqHandler(void *callbackRef) {
-  u32 BaseAddress;
-  u32 IntID;  /* interrupt id */
+  //u32 BaseAddress;
+  //u32 IntID;  /* interrupt id */
 
   //XScuGic_Disable(&gic, 61);
   Xil_ExceptionDisable();
 
+  XTime_GetTime(&time_end);
+
+  /* Clear the output GPIO pin */
   *(volatile u32*)0x41200008 = 0x0;
   Xil_Out32(0x41200008,0x0);
   Xil_DCacheFlushRange(0x41200008, 4);
@@ -101,37 +121,98 @@ void irqHandler(void *callbackRef) {
   //XGpio_WriteReg(0x41200000, XGPIO_IER_OFFSET,
   //      Register &  ~XGPIO_IR_MASK);
 
-  IntID = XScuGic_ReadReg((u32)callbackRef, XSCUGIC_INT_ACK_OFFSET) & XSCUGIC_ACK_INTID_MASK;
+  //u32 IntID = XScuGic_ReadReg(XPAR_SCUGIC_CPU_BASEADDR, XSCUGIC_INT_ACK_OFFSET) & XSCUGIC_ACK_INTID_MASK;
 
-  xil_printf("Entering irqHandler\n\rID: %d \n\r", IntID);
-  xil_printf("irqHandler\n\r");
+  //xil_printf("Entering irqHandler\n\rID: %d \n\r", IntID);
+  //xil_printf("Running irqHandler\n\r");
 
   if (callbackRef == NULL) {
     xil_printf("CallbackRef is NULL, returning\n\r");
   }
 
-
   //BaseAddress =  (u32)callbackRef;
-
-
 
   //IntID = IntID & XSCUGIC_ACK_INTID_MASK;
 
-  xil_printf("Interrupt ID: %d\n\r", IntID);
+  // xil_printf("Interrupt ID: %d\n\r", IntID);
 
   //if (XSCUGIC_MAX_NUM_INTR_INPUTS < IntID) {
   //  printf("ID > MAX_NUM_INTR_INPUTS \n\r");
   //  return;
  // }
 
-
   //InterruptID = IntID;
-
   irqProcessed++;
+  had_reply = 1;
 
   //XScuGic_Enable(&gic, 61);
   Xil_ExceptionEnable();
 
+}
+/* response time measurement experiment */
+int experiment1_cmd(int n, char **args) {
+
+
+
+  u32 num_samples;
+
+  u64 diff;
+  u64 clock_ticks;
+
+  if (n < 2 || n > 2) {
+    xil_printf("Wrong number of arguments\n\r");
+    return 0;
+  }
+
+  num_samples = atoi(args[1]);
+
+  xil_printf("Starting experiment\n\r\n\r");
+
+  printf("run_id, usec (cpu), num_ticks at 200MHz, usecs (axi timer) \n\r");
+  for (int i = 0; i < num_samples; i ++) {
+
+    /* wait for input pin to go low */
+     while (Xil_In32(0x41200000) != 0) ;
+
+    XTime_GetTime(&time_start);
+    *(volatile unsigned int*)0x41200008 = 1; /* set output GPIO pin */
+    //Xil_DCacheFlushRange(0x41200008, 4);
+
+
+    while (!had_reply);
+
+    diff = time_end - time_start;
+
+
+    //printf("Cap1: %u \n\r", XTmrCtr_GetCaptureValue(&tmr,0));
+    //printf("Cap2: %u \n\r", XTmrCtr_GetCaptureValue(&tmr,1));
+    u32 tmr0 = XTmrCtr_GetCaptureValue(&tmr,0);
+    u32 tmr1 = XTmrCtr_GetCaptureValue(&tmr,1);
+
+    u32 tmr_diff = tmr1 - tmr0;
+
+
+
+    float tmr_diff_s = (float)tmr_diff / 200000000.0;
+
+    clock_ticks = diff * 2; /* performance counter only ticks once every two clock-ticks */
+
+    //printf("Start: %llu\n\r",time_start);
+    //printf("Reply: %llu\n\r",time_end);
+    //printf("Waited for %llu ticks for a reply\n\r",clock_ticks);
+
+    double s = (double)clock_ticks / (double)CLOCK_FREQ;
+
+    //printf("seconds: %f\n\r",s);
+    //printf("ms: %f\n\r",s*MSEC_PER_SEC);
+    printf("%d, %f, %u, %f\n\r",i, s*USEC_PER_SEC, tmr_diff, tmr_diff_s*USEC_PER_SEC);
+    //printf("ns: %f\n\r",s*NSEC_PER_SEC);
+
+    /* prepare to run again */
+    had_reply = 0;
+  }
+
+  return 1;
 }
 
 
@@ -139,9 +220,8 @@ void init_app() {
 
   int status;
 
-
   //Xil_SetTlbAttributes(CONTROL, NORM_NONCACHE);
-  xil_printf("Initializing app specific settings\n\r");
+  xil_printf("Initializing app specific settings!\n\r");
   /* GIC DIST INIT */
 
   gic_config = XScuGic_LookupConfig(XPAR_PS7_SCUGIC_0_DEVICE_ID);
@@ -175,7 +255,7 @@ void init_app() {
   XGpio_WriteReg(0x41200000, XGPIO_IER_OFFSET,
         Register | XGPIO_IR_MASK);
 
-  xil_printf(" GPIO INTR: %u\n\r"); XGpio_ReadReg(0x41200000, XGPIO_IER_OFFSET);
+  //xil_printf(" GPIO INTR: %u\n\r"); XGpio_ReadReg(0x41200000, XGPIO_IER_OFFSET);
 
   /* Enable interrupt */
   // XScuGic WriteReg(DIST_BASEADDR, XSCUGIC_ENABLE_SET_OFFSET +())
@@ -183,6 +263,53 @@ void init_app() {
   //u32 Mask = 0x00000001U << ( 28 % 32U);
 
 
+  /* initiate AXI timer */
+
+  tmr_config = XTmrCtr_LookupConfig(XPAR_AXI_TIMER_0_DEVICE_ID);
+
+  XTmrCtr_CfgInitialize(&tmr, tmr_config, XPAR_AXI_TIMER_0_BASEADDR );
+
+  if (XST_SUCCESS != XTmrCtr_Initialize(&tmr,XPAR_AXI_TIMER_0_DEVICE_ID )) {
+    xil_printf("AXI Timer initialization failed!\n\r");
+  } else {
+    xil_printf("AXI Timer initialized!\n\r");
+  }
+
+  if (XST_SUCCESS != XTmrCtr_SelfTest(&tmr,0)) printf("FAILED SELFTEST 0\n\r");
+  if (XST_SUCCESS != XTmrCtr_SelfTest(&tmr,1)) printf("FAILED_SELFTEST 1\n\r");
+
+
+  XTmrCtr_SetOptions(&tmr,1, XTC_CAPTURE_MODE_OPTION);
+  XTmrCtr_SetOptions(&tmr,0, XTC_CAPTURE_MODE_OPTION | XTC_ENABLE_ALL_OPTION);
+  //XTmrCtr_SetOptions(&tmr,1, XTC_CAPTURE_MODE_OPTION | XTC_ENABLE_ALL_OPTION);
+  XTmrCtr_SetResetValue(&tmr,0 ,0);
+  XTmrCtr_SetResetValue(&tmr,1 ,0);
+
+  //XTmrCtr_Start(&tmr,0);
+
+  xil_printf("Verifying that timers are running");
+  u32 tim0 = XTmrCtr_GetValue(&tmr,0 );
+  u32 tim1 = XTmrCtr_GetValue(&tmr,1 );
+  xil_printf("... ");
+  if (XTmrCtr_GetValue(&tmr,0 ) != tim0 &&
+      XTmrCtr_GetValue(&tmr,1 ) != tim1) {
+    xil_printf("OK!\n\r");
+  } else {
+    xil_printf("ERROR: Timers are not running\n\r");
+  }
+
+  //xil_printf("Cap1: %u \n\r", XTmrCtr_GetCaptureValue(&tmr,0));
+  //xil_printf("Cap2: %u \n\r", XTmrCtr_GetCaptureValue(&tmr,1));
+
+  //XTmrCtr_Stop(&tmr, 0);
+  //XTmrCtr_Stop(&tmr, 1);
+  //XTmrCtr_Reset(&tmr, 0);
+  //XTmrCtr_Reset(&tmr, 1);
+
+  //printf("RESET t0: %d \n\r", XTmrCtr_GetValue(&tmr,0 ));
+  //printf("RESET t1: %d \n\r", XTmrCtr_GetValue(&tmr,1 ));
+  //printf("RESET t0: %d \n\r", XTmrCtr_GetValue(&tmr,0 ));
+  //printf("RESET t1: %d \n\r", XTmrCtr_GetValue(&tmr,1 ));
 }
 
 /* ************************************************************
@@ -222,7 +349,16 @@ char prompt[MAX_PROMPT_SIZE] = "> ";
 
 const int max_tokens = 20; /* Maximum number of tokens*/
 
-const char *header = "ZynqShell\n\rtyping \"help\" shows a list of applicable commands\n\r";
+const char *logo =
+    "    _____             _____ _       _ _ \n\r"
+    "   |__   |_ _ ___ ___|   __| |_ ___| | |\n\r"
+    "   |   __| | |   | . |__   |   | -_| | |\n\r"
+    "   |_____|_  |_|_|_  |_____|_|_|___|_|_|\n\r"
+    "         |___|     |_|                  \n\r";
+
+
+
+const char *header = "\n\rZynqShell\n\rtyping \"help\" shows a list of applicable commands\n\r";
 const char *tokdelim = "\n\t\r ";
 
 const char *cmds[] = {"help"
@@ -241,6 +377,7 @@ const char *cmds[] = {"help"
                       ,"sdStore"
 #endif
                       ,"programFPGA"
+                      ,"ex1"
                       };
 
 const char *hlp_str =
@@ -926,6 +1063,7 @@ int (*cmd_func[])(int, char **) = {
   ,&sd_store_raw_cmd
 #endif
   ,&programFPGA_cmd
+  ,experiment1_cmd
 };
 
 
@@ -1019,11 +1157,9 @@ int main()
   int i = 0;
 
   init_platform();
+  printf("\n\r\n\r");
 
   init_app();
-
-  /* Print the welcome text */
-  xil_printf("%s", header);
 
   /* Initialisation */
   cmd_buffer = malloc(cmd_buffer_size * sizeof(char));
@@ -1035,10 +1171,9 @@ int main()
   if (result != FR_OK) {
     xil_printf("Error mounting file system!\n\r");
   } else {
-    xil_printf("File system successfully mounted\n\r");
+    xil_printf("File system successfully mounted!\n\r");
     sd_ok = 1;
   }
-
 #endif
 
   /* Initialise array storage */
@@ -1048,6 +1183,10 @@ int main()
     arrays[i].type = BYTE_TYPE;
     arrays[i].size = 0;
   }
+
+  /* Print welcoming header */
+  xil_printf("%s", logo);
+  xil_printf("%s", header);
 
   /* The command parsing and executing loop */
   while(running) {
